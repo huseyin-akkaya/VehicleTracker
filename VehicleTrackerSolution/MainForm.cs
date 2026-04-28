@@ -369,11 +369,14 @@ public class MainForm : Form
 
 	private void OnSimulatorClicked(object? sender, EventArgs e)
 	{
-		// KIRIK PARANTEZLER BURADA DÜZELTİLDİ
 		var taxCalc = _serviceProvider.GetRequiredService<TaxCalculatorService>();
 		var brandRepo = _serviceProvider.GetRequiredService<VehicleTracker.DataAccess.Repositories.VehicleBrandRepository>();
 
-		using var form = new SimulatorForm(taxCalc, brandRepo);
+		// YENİ EKLENEN SATIR: Model Repository'i de DI Container'dan çekiyoruz
+		var modelRepo = _serviceProvider.GetRequiredService<VehicleTracker.DataAccess.Repositories.VehicleModelRepository>();
+
+		// 3. PARAMETREYİ EKLİYORUZ: modelRepo
+		using var form = new SimulatorForm(taxCalc, brandRepo, modelRepo);
 		form.ShowDialog(this);
 	}
 

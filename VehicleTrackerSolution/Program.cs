@@ -14,7 +14,7 @@ internal static class Program
 {
 	// !! Gist Raw URL'ini buraya yapıştır
 	private const string GistRawUrl =
-		"https://gist.githubusercontent.com/huseyin-akkaya/0d9166875b3f7d501d6c952bad04c605/raw/badad5eae4f9a7114f2c5ef712da7d9e3cf64fea/vehicle-tracker-data.json";
+		"https://gist.githubusercontent.com/huseyin-akkaya/09fd9770407d228f8179a7a78c10e4b2/raw/f60eea47bd10c13e8c268c1d8eb4d4b061be2697/vehicle-data-v2.json";
 
 	[STAThread]
 	static void Main()
@@ -76,7 +76,7 @@ internal static class Program
 	private static void ConfigureServices(IServiceCollection services)
 	{
 		services.AddScoped<AppDbContext>();
-
+		services.AddTransient<VehicleModelRepository>();
 		services.AddTransient<VehicleRepository>();
 		services.AddTransient<ExpenseRepository>();
 		services.AddTransient<VehicleBrandRepository>();

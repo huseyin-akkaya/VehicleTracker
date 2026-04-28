@@ -11,45 +11,42 @@ public class SimulatorForm : Form
 	// ── Bağımlılıklar ─────────────────────────────────────────
 	private readonly TaxCalculatorService _taxCalculator;
 	private readonly VehicleBrandRepository _brandRepository;
+	private readonly VehicleModelRepository _modelRepository;   // ← YENİ
 
-	// ── Sabit hesap parametreleri ─────────────────────────────
-	// Yakıt tüketimi: ortalama 7 lt/100km, güncel litre fiyatı
-	private const double AvgFuelConsumptionPer100Km = 7.0;
-	private const decimal FuelPricePerLitre = 42.0m;  // ₺ — kullanıcı değiştirebilir
-	private const decimal AnnualMaintenanceBase = 8_000m; // ₺ temel bakım
-	private const decimal InspectionFee = 1_200m; // ₺ iki yılda bir
-	private const decimal OtvBase = 15_000m;// ₺ temsili ÖTV (yeni alımda)
+	// ── Sabit ─────────────────────────────────────────────────
+	private const decimal InspectionFee = 1_200m;
+	private const decimal AnnualMaintenanceBase = 8_000m;
 
 	// ── Giriş bileşenleri ────────────────────────────────────
 	private Panel _headerPanel = null!;
-	private Label _lblHeader = null!;
 	private GroupBox _grpInput = null!;
 	private TableLayoutPanel _inputLayout = null!;
 	private ComboBox _cmbBrand = null!;
-	private TextBox _txtModel = null!;
+	private ComboBox _cmbModel = null!;   // ← TextBox yerine ComboBox
 	private NumericUpDown _numYear = null!;
 	private NumericUpDown _numAnnualKm = null!;
 	private NumericUpDown _numFuelPrice = null!;
 	private Button _btnCalculate = null!;
 
-	// ── Sonuç bileşenleri ────────────────────────────────────
+	// ── Sonuç bileşenleri ─────────────────────────────────────
 	private GroupBox _grpResult = null!;
 	private Panel _resultPanel = null!;
 	private Label _lblNoResult = null!;
 
 	public SimulatorForm(
 		TaxCalculatorService taxCalculator,
-		VehicleBrandRepository brandRepository)
+		VehicleBrandRepository brandRepository,
+		VehicleModelRepository modelRepository)    // ← YENİ
 	{
 		_taxCalculator = taxCalculator;
 		_brandRepository = brandRepository;
+		_modelRepository = modelRepository;
 
 		InitializeComponents();
 	}
 
 	private void InitializeComponents()
 	{
-		// ── Form ──────────────────────────────────────────────
 		Text = "Tahmini Maliyet Simülatörü";
 		Size = new Size(580, 680);
 		MinimumSize = new Size(520, 620);
@@ -60,31 +57,24 @@ public class SimulatorForm : Form
 
 		// ── Header ────────────────────────────────────────────
 		_headerPanel = new Panel
-		{
-			Dock = DockStyle.Top,
-			Height = 56,
-			BackColor = Color.FromArgb(44, 62, 80)
-		};
-		_lblHeader = new Label
+		{ Dock = DockStyle.Top, Height = 56, BackColor = Color.FromArgb(44, 62, 80) };
+		_headerPanel.Controls.Add(new Label
 		{
 			Text = "🧮  Tahmini Yıllık Maliyet Simülatörü",
 			ForeColor = Color.White,
 			Font = new Font("Segoe UI", 11.5f, FontStyle.Bold),
 			AutoSize = true,
 			Location = new Point(18, 14)
-		};
-		_headerPanel.Controls.Add(_lblHeader);
+		});
 
-		// ── Giriş GroupBox ────────────────────────────────────
+		// ── Input GroupBox ────────────────────────────────────
 		_grpInput = new GroupBox
 		{
 			Text = "Araç Bilgileri",
-			Dock = DockStyle.Top,
-			Height = 260,
+			Dock = DockStyle.Fill,
 			Padding = new Padding(14, 8, 14, 8),
 			ForeColor = Color.FromArgb(44, 62, 80),
-			Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
-			Margin = new Padding(16, 12, 16, 0)
+			Font = new Font("Segoe UI", 9.5f, FontStyle.Bold)
 		};
 
 		_inputLayout = new TableLayoutPanel
@@ -101,7 +91,7 @@ public class SimulatorForm : Form
 			_inputLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42f));
 		_inputLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
 
-		// Marka
+		// Marka ComboBox
 		_cmbBrand = new ComboBox
 		{
 			DropDownStyle = ComboBoxStyle.DropDownList,
@@ -112,13 +102,16 @@ public class SimulatorForm : Form
 			FlatStyle = FlatStyle.Flat
 		};
 
-		// Model
-		_txtModel = new TextBox
+		// Model ComboBox — marka seçimine göre dolacak
+		_cmbModel = new ComboBox
 		{
+			DropDownStyle = ComboBoxStyle.DropDownList,
+			DisplayMember = "Name",
+			ValueMember = "Id",
 			Dock = DockStyle.Fill,
 			BackColor = Color.White,
-			BorderStyle = BorderStyle.FixedSingle,
-			PlaceholderText = "Corolla, Focus, Clio..."
+			FlatStyle = FlatStyle.Flat,
+			Enabled = false   // Marka seçilmeden pasif
 		};
 
 		// Üretim Yılı
@@ -131,7 +124,7 @@ public class SimulatorForm : Form
 			BackColor = Color.White
 		};
 
-		// Yıllık Tahmini Km
+		// Yıllık Km
 		_numAnnualKm = new NumericUpDown
 		{
 			Dock = DockStyle.Fill,
@@ -142,19 +135,19 @@ public class SimulatorForm : Form
 			BackColor = Color.White
 		};
 
-		// Yakıt Fiyatı (kullanıcı güncelleyebilir)
+		// Yakıt Fiyatı
 		_numFuelPrice = new NumericUpDown
 		{
 			Dock = DockStyle.Fill,
 			Minimum = 1,
 			Maximum = 999,
-			Value = (decimal)FuelPricePerLitre,
+			Value = 42,
 			DecimalPlaces = 2,
 			BackColor = Color.White
 		};
 
-		AddInputRow(0, "Marka", _cmbBrand);
-		AddInputRow(1, "Model", _txtModel);
+		AddInputRow(0, "Marka *", _cmbBrand);
+		AddInputRow(1, "Model *", _cmbModel);
 		AddInputRow(2, "Üretim Yılı", _numYear);
 		AddInputRow(3, "Yıllık Tahmini Km", _numAnnualKm);
 		AddInputRow(4, "Yakıt Fiyatı (₺/lt)", _numFuelPrice);
@@ -166,13 +159,12 @@ public class SimulatorForm : Form
 		{
 			Text = "🧮  Hesapla",
 			Height = 42,
-			Dock = DockStyle.Top,
+			Dock = DockStyle.Fill,
 			BackColor = Color.FromArgb(41, 128, 185),
 			ForeColor = Color.White,
 			FlatStyle = FlatStyle.Flat,
 			Font = new Font("Segoe UI", 10.5f, FontStyle.Bold),
-			Cursor = Cursors.Hand,
-			Margin = new Padding(16, 10, 16, 0)
+			Cursor = Cursors.Hand
 		};
 		_btnCalculate.FlatAppearance.BorderSize = 0;
 
@@ -185,17 +177,11 @@ public class SimulatorForm : Form
 			ForeColor = Color.FromArgb(44, 62, 80),
 			Font = new Font("Segoe UI", 9.5f, FontStyle.Bold)
 		};
-
 		_resultPanel = new Panel
-		{
-			Dock = DockStyle.Fill,
-			BackColor = Color.White,
-			AutoScroll = true
-		};
-
+		{ Dock = DockStyle.Fill, BackColor = Color.White, AutoScroll = true };
 		_lblNoResult = new Label
 		{
-			Text = "Araç bilgilerini girerek 'Hesapla' butonuna basın.",
+			Text = "Marka ve model seçerek 'Hesapla' butonuna basın.",
 			ForeColor = Color.FromArgb(150, 150, 170),
 			Font = new Font("Segoe UI", 9.5f, FontStyle.Italic),
 			AutoSize = false,
@@ -205,41 +191,30 @@ public class SimulatorForm : Form
 		_resultPanel.Controls.Add(_lblNoResult);
 		_grpResult.Controls.Add(_resultPanel);
 
-		// ── Wrapper Panel (margin için) ───────────────────────
+		// ── Wrapper'lar ───────────────────────────────────────
 		var resultWrapper = new Panel
-		{
-			Dock = DockStyle.Fill,
-			Padding = new Padding(16, 8, 16, 12)
-		};
+		{ Dock = DockStyle.Fill, Padding = new Padding(16, 8, 16, 12) };
+		_grpResult.Dock = DockStyle.Fill;
 		resultWrapper.Controls.Add(_grpResult);
 
 		var calcWrapper = new Panel
-		{
-			Dock = DockStyle.Top,
-			Height = 56,
-			Padding = new Padding(16, 7, 16, 7)
-		};
-		_btnCalculate.Dock = DockStyle.Fill;
+		{ Dock = DockStyle.Top, Height = 56, Padding = new Padding(16, 7, 16, 7) };
 		calcWrapper.Controls.Add(_btnCalculate);
 
 		var inputWrapper = new Panel
-		{
-			Dock = DockStyle.Top,
-			Height = 278,
-			Padding = new Padding(16, 12, 16, 0)
-		};
+		{ Dock = DockStyle.Top, Height = 258, Padding = new Padding(16, 12, 16, 0) };
 		_grpInput.Dock = DockStyle.Fill;
 		inputWrapper.Controls.Add(_grpInput);
 
-		// ── Yerleşim ──────────────────────────────────────────
-		Controls.Add(resultWrapper);   // Fill
-		Controls.Add(calcWrapper);     // Top (sondan önce)
-		Controls.Add(inputWrapper);    // Top
-		Controls.Add(_headerPanel);    // Top (en üstte)
+		Controls.Add(resultWrapper);
+		Controls.Add(calcWrapper);
+		Controls.Add(inputWrapper);
+		Controls.Add(_headerPanel);
 
 		// ── Events ────────────────────────────────────────────
-		_btnCalculate.Click += async (_, _) => await OnCalculateAsync();
 		Load += async (_, _) => await LoadBrandsAsync();
+		_cmbBrand.SelectedIndexChanged += async (_, _) => await OnBrandChangedAsync();
+		_btnCalculate.Click += async (_, _) => await OnCalculateAsync();
 	}
 
 	// ─────────────────────────────────────────────────────────
@@ -253,6 +228,7 @@ public class SimulatorForm : Form
 			_cmbBrand.DataSource = brands.ToList();
 			_cmbBrand.DisplayMember = "Name";
 			_cmbBrand.ValueMember = "Id";
+			_cmbBrand.SelectedIndex = -1;
 		}
 		catch (Exception ex)
 		{
@@ -262,13 +238,60 @@ public class SimulatorForm : Form
 	}
 
 	// ─────────────────────────────────────────────────────────
-	//  Hesaplama
+	//  Marka değişince modelleri yükle
+	// ─────────────────────────────────────────────────────────
+	private async Task OnBrandChangedAsync()
+	{
+		_cmbModel.DataSource = null;
+		_cmbModel.Enabled = false;
+		_resultPanel.Controls.Clear();
+		_resultPanel.Controls.Add(_lblNoResult);
+
+		if (_cmbBrand.SelectedItem is not VehicleBrand selectedBrand)
+			return;
+
+		try
+		{
+			var models = await _modelRepository.GetByBrandIdAsync(selectedBrand.Id);
+
+			if (models.Count == 0)
+			{
+				MessageBox.Show(
+					$"'{selectedBrand.Name}' için henüz model verisi yok.\n" +
+					"Senkronizasyon tamamlandıktan sonra tekrar deneyin.",
+					"Model Bulunamadı",
+					MessageBoxButtons.OK, MessageBoxIcon.Information);
+				return;
+			}
+
+			_cmbModel.DataSource = models.ToList();
+			_cmbModel.DisplayMember = "Name";
+			_cmbModel.ValueMember = "Id";
+			_cmbModel.SelectedIndex = 0;
+			_cmbModel.Enabled = true;
+		}
+		catch (Exception ex)
+		{
+			MessageBox.Show($"Modeller yüklenemedi:\n{ex.Message}",
+				"Hata", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+		}
+	}
+
+	// ─────────────────────────────────────────────────────────
+	//  Hesaplama — artık modelin gerçek verilerini kullanıyor
 	// ─────────────────────────────────────────────────────────
 	private async Task OnCalculateAsync()
 	{
-		if (_cmbBrand.SelectedItem is null)
+		if (_cmbBrand.SelectedItem is not VehicleBrand selectedBrand)
 		{
 			MessageBox.Show("Lütfen bir marka seçin.", "Eksik Bilgi",
+				MessageBoxButtons.OK, MessageBoxIcon.Warning);
+			return;
+		}
+
+		if (_cmbModel.SelectedItem is not VehicleModel selectedModel)
+		{
+			MessageBox.Show("Lütfen bir model seçin.", "Eksik Bilgi",
 				MessageBoxButtons.OK, MessageBoxIcon.Warning);
 			return;
 		}
@@ -278,53 +301,60 @@ public class SimulatorForm : Form
 
 		try
 		{
-			var brand = (VehicleBrand)_cmbBrand.SelectedItem!;
 			int year = (int)_numYear.Value;
 			double annualKm = (double)_numAnnualKm.Value;
 			decimal fuelPrice = _numFuelPrice.Value;
+			bool isElectric = selectedModel.AvgFuelConsumption <= 0;
 
-			// ── Yakıt hesabı ──────────────────────────────────
-			// (yıllık km / 100) × tüketim × litre fiyatı
-			decimal fuelBase = (decimal)(annualKm / 100.0 * AvgFuelConsumptionPer100Km) * fuelPrice;
+			// ── Yakıt — modelin gerçek tüketimi ──────────────
+			decimal fuelBase = 0m;
+			decimal fuelTax = 0m;
+			decimal fuelTotal = 0m;
 
-			decimal fuelTax = await _taxCalculator.CalculateTaxAsync(fuelBase, "Yakıt", year);
-			decimal fuelTotal = fuelBase + fuelTax;
+			if (!isElectric)
+			{
+				fuelBase = (decimal)(annualKm / 100.0 * selectedModel.AvgFuelConsumption) * fuelPrice;
+				fuelTax = await _taxCalculator.CalculateTaxAsync(fuelBase, "Yakıt", year);
+				fuelTotal = fuelBase + fuelTax;
+			}
 
-			// ── Bakım hesabı ──────────────────────────────────
-			// Araç yaşı arttıkça bakım maliyeti yükselir (AgeMultiplier TaxCalculator içinde)
-			decimal maintTax = await _taxCalculator.CalculateTaxAsync(AnnualMaintenanceBase, "Bakım", year);
-			decimal maintTotal = AnnualMaintenanceBase + maintTax;
+			// ── Bakım ─────────────────────────────────────────
+			// Ağır araçlar daha yüksek bakım maliyeti (her 100 kg için %1 artış)
+			decimal weightFactor = 1m + (selectedModel.WeightKg > 1200
+				? (decimal)(selectedModel.WeightKg - 1200) / 10000m
+				: 0m);
 
-			// ── Vergi / MTV (temsili) ─────────────────────────
-			// Motor hacmi bilinmediği için yaşa dayalı sabit katsayı uygulanır
-			decimal mtvBase = CalculateMtvBase(year);
+			decimal maintBase = Math.Round(AnnualMaintenanceBase * weightFactor, 0);
+			decimal maintTax = await _taxCalculator.CalculateTaxAsync(maintBase, "Bakım", year);
+			decimal maintTotal = maintBase + maintTax;
+
+			// ── MTV — motor hacmine göre kademeli ────────────
+			decimal mtvBase = CalculateMtvByEngine(selectedModel.EngineVolume, year);
 			decimal mtvTax = await _taxCalculator.CalculateTaxAsync(mtvBase, "Vergi", year);
 			decimal mtvTotal = mtvBase + mtvTax;
 
-			// ── Sigorta tahmini ───────────────────────────────
+			// ── Sigorta ───────────────────────────────────────
 			decimal insuranceBase = CalculateInsuranceBase(year);
 			decimal insuranceTax = await _taxCalculator.CalculateTaxAsync(insuranceBase, "Sigorta", year);
 			decimal insuranceTotal = insuranceBase + insuranceTax;
 
-			// ── Muayene (iki yılda bir, yıllık karşılığı) ────
+			// ── Muayene ───────────────────────────────────────
 			decimal annualInspection = InspectionFee / 2m;
 
-			// ── Toplam ────────────────────────────────────────
 			decimal grandTotal = fuelTotal + maintTotal + mtvTotal + insuranceTotal + annualInspection;
 
-			// ── Raporu göster ─────────────────────────────────
-			string modelLabel = string.IsNullOrWhiteSpace(_txtModel.Text)
-				? brand.Name
-				: $"{brand.Name} {_txtModel.Text.Trim()}";
-
 			RenderResult(new SimulationResult(
-				ModelLabel: modelLabel,
+				ModelLabel: $"{selectedBrand.Name} {selectedModel.Name}",
 				Year: year,
 				AnnualKm: annualKm,
+				EngineVolume: selectedModel.EngineVolume,
+				WeightKg: selectedModel.WeightKg,
+				AvgConsumption: selectedModel.AvgFuelConsumption,
+				IsElectric: isElectric,
 				FuelBase: fuelBase,
 				FuelTax: fuelTax,
 				FuelTotal: fuelTotal,
-				MaintBase: AnnualMaintenanceBase,
+				MaintBase: maintBase,
 				MaintTax: maintTax,
 				MaintTotal: maintTotal,
 				MtvBase: mtvBase,
@@ -359,173 +389,187 @@ public class SimulatorForm : Form
 
 		int age = DateTime.Now.Year - r.Year;
 
-		// Tüm satırları bir FlowLayoutPanel'de üret
 		var flow = new FlowLayoutPanel
 		{
 			Dock = DockStyle.Fill,
 			FlowDirection = FlowDirection.TopDown,
 			WrapContents = false,
 			AutoScroll = true,
-			Padding = new Padding(8, 8, 8, 8),
+			Padding = new Padding(8),
 			BackColor = Color.White
 		};
 
 		// Başlık
-		flow.Controls.Add(MakeResultHeader(
-			$"{r.ModelLabel}  |  {r.Year} model  |  {r.AnnualKm:N0} km/yıl"));
+		flow.Controls.Add(MakeHeader(
+			$"{r.ModelLabel}  ·  {r.Year} model  ·  " +
+			$"{r.AnnualKm:N0} km/yıl  ·  " +
+			(r.IsElectric ? "⚡ Elektrikli" : $"{r.EngineVolume:F1}L / {r.AvgConsumption:F1}lt/100km")));
+
+		// Araç özellikleri bandı
+		flow.Controls.Add(MakeInfoBand(
+			$"Ağırlık: {r.WeightKg:N0} kg   |   " +
+			(r.IsElectric
+				? "Elektrikli araç — yakıt gideri hesaplanmadı"
+				: $"Yakıt tüketimi: {r.AvgConsumption:F1} lt/100km")));
 
 		flow.Controls.Add(MakeDivider());
 
-		// Satırlar
-		flow.Controls.Add(MakeResultRow("⛽ Yakıt",
-			r.FuelBase, r.FuelTax, r.FuelTotal, Color.FromArgb(255, 243, 220)));
+		// Yakıt satırı
+		if (!r.IsElectric)
+			flow.Controls.Add(MakeResultRow("⛽ Yakıt",
+				r.FuelBase, r.FuelTax, r.FuelTotal, Color.FromArgb(255, 243, 220)));
+		else
+			flow.Controls.Add(MakeInfoBand("⚡ Elektrikli araç — yakıt kalemi yok (şarj maliyeti hesaba katılmamıştır)"));
 
 		flow.Controls.Add(MakeResultRow("🔧 Bakım",
 			r.MaintBase, r.MaintTax, r.MaintTotal, Color.FromArgb(220, 237, 255)));
-
 		flow.Controls.Add(MakeResultRow("📋 MTV / Vergi",
 			r.MtvBase, r.MtvTax, r.MtvTotal, Color.FromArgb(255, 220, 220)));
-
 		flow.Controls.Add(MakeResultRow("🛡️ Sigorta",
 			r.InsuranceBase, r.InsuranceTax, r.InsuranceTotal, Color.FromArgb(220, 255, 235)));
 
 		flow.Controls.Add(MakeDivider());
 
 		// Muayene notu
-		flow.Controls.Add(MakeNoteLabel(
-			$"🔍  Not: Muayene bedeli iki yılda bir yaklaşık {InspectionFee:N0} ₺'dir." +
-			$" Yıllık karşılığı: {r.AnnualInspection:N0} ₺"));
+		flow.Controls.Add(MakeNote(
+			$"🔍  Muayene: 2 yılda bir ~{InspectionFee:N0} ₺  →  yıllık karşılık: {r.AnnualInspection:N0} ₺"));
 
 		if (age >= 16)
-			flow.Controls.Add(MakeNoteLabel(
-				$"⚠️  {age} yaşında araç — MTV ve bakım çarpanları yüksek uygulanmıştır."));
+			flow.Controls.Add(MakeNote(
+				$"⚠️  {age} yaşında araç — MTV ve bakım çarpanları yüksek uygulandı."));
 
 		flow.Controls.Add(MakeDivider());
-
-		// Genel Toplam
-		flow.Controls.Add(MakeGrandTotalLabel(r.GrandTotal));
-
-		flow.Controls.Add(MakeNoteLabel(
-			"* Bu hesaplama tahminidir, veritabanına kaydedilmemektedir." +
-			" Gerçek maliyetler yakıt fiyatı, sigorta poliçesi ve kullanıma göre değişir."));
+		flow.Controls.Add(MakeGrandTotal(r.GrandTotal));
+		flow.Controls.Add(MakeNote(
+			"* Bu hesaplama tahminidir, veritabanına kaydedilmemektedir."));
 
 		_resultPanel.Controls.Add(flow);
 	}
 
 	// ── Render yardımcıları ───────────────────────────────────
 
-	private static Label MakeResultHeader(string text)
+	private static Label MakeHeader(string text) => new()
 	{
-		return new Label
-		{
-			Text = text,
-			Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
-			ForeColor = Color.FromArgb(44, 62, 80),
-			AutoSize = false,
-			Width = 500,
-			Height = 28,
-			TextAlign = ContentAlignment.MiddleLeft
-		};
-	}
+		Text = text,
+		Width = 500,
+		Height = 28,
+		AutoSize = false,
+		Font = new Font("Segoe UI", 9f, FontStyle.Bold),
+		ForeColor = Color.FromArgb(44, 62, 80),
+		TextAlign = ContentAlignment.MiddleLeft
+	};
+
+	private static Label MakeInfoBand(string text) => new()
+	{
+		Text = text,
+		Width = 510,
+		Height = 26,
+		AutoSize = false,
+		Font = new Font("Segoe UI", 8.5f),
+		ForeColor = Color.FromArgb(80, 80, 110),
+		BackColor = Color.FromArgb(240, 242, 250),
+		TextAlign = ContentAlignment.MiddleLeft,
+		Padding = new Padding(6, 0, 0, 0),
+		Margin = new Padding(0, 2, 0, 2)
+	};
 
 	private static Panel MakeResultRow(
-		string label,
-		decimal baseAmt, decimal tax, decimal total,
-		Color bgColor)
+		string label, decimal baseAmt, decimal tax, decimal total, Color bg)
 	{
 		var row = new Panel
 		{
 			Width = 510,
-			Height = 68,
-			BackColor = bgColor,
-			Margin = new Padding(0, 4, 0, 0),
+			Height = 64,
+			BackColor = bg,
+			Margin = new Padding(0, 3, 0, 0),
 			Padding = new Padding(10, 6, 10, 6)
 		};
-
-		// Sol: kategori adı + base + vergi
-		var lblLeft = new Label
+		row.Controls.Add(new Label
 		{
-			Text = $"{label}\nGider: {baseAmt:N2} ₺   |   Vergi Payı: {tax:N2} ₺",
+			Text = $"{label}\nGider: {baseAmt:N2} ₺   |   Vergi payı: {tax:N2} ₺",
 			Font = new Font("Segoe UI", 8.5f),
 			ForeColor = Color.FromArgb(50, 50, 70),
 			AutoSize = false,
-			Size = new Size(320, 56),
+			Size = new Size(320, 52),
 			Location = new Point(10, 6)
-		};
-
-		// Sağ: toplam
-		var lblRight = new Label
+		});
+		row.Controls.Add(new Label
 		{
 			Text = $"{total:N2} ₺",
 			Font = new Font("Segoe UI", 12f, FontStyle.Bold),
 			ForeColor = Color.FromArgb(30, 30, 60),
 			AutoSize = false,
-			Size = new Size(150, 56),
+			Size = new Size(150, 52),
 			Location = new Point(340, 6),
 			TextAlign = ContentAlignment.MiddleRight
-		};
-
-		row.Controls.Add(lblLeft);
-		row.Controls.Add(lblRight);
-
+		});
 		return row;
 	}
 
-	private static Label MakeGrandTotalLabel(decimal total)
+	private static Label MakeGrandTotal(decimal total) => new()
 	{
-		return new Label
-		{
-			Text = $"💰  Tahmini Toplam Yıllık Maliyet:  {total:N2} ₺",
-			Font = new Font("Segoe UI", 11f, FontStyle.Bold),
-			ForeColor = Color.White,
-			BackColor = Color.FromArgb(44, 62, 80),
-			AutoSize = false,
-			Width = 510,
-			Height = 40,
-			TextAlign = ContentAlignment.MiddleCenter,
-			Margin = new Padding(0, 6, 0, 6)
-		};
-	}
+		Text = $"💰  Tahmini Toplam Yıllık Maliyet:  {total:N2} ₺",
+		Font = new Font("Segoe UI", 11f, FontStyle.Bold),
+		ForeColor = Color.White,
+		BackColor = Color.FromArgb(44, 62, 80),
+		AutoSize = false,
+		Width = 510,
+		Height = 40,
+		TextAlign = ContentAlignment.MiddleCenter,
+		Margin = new Padding(0, 6, 0, 6)
+	};
 
-	private static Label MakeNoteLabel(string text)
+	private static Label MakeNote(string text) => new()
 	{
-		return new Label
-		{
-			Text = text,
-			Font = new Font("Segoe UI", 8f, FontStyle.Italic),
-			ForeColor = Color.FromArgb(120, 120, 140),
-			AutoSize = false,
-			Width = 510,
-			Height = 32,
-			TextAlign = ContentAlignment.MiddleLeft
-		};
-	}
+		Text = text,
+		Width = 510,
+		Height = 30,
+		AutoSize = false,
+		Font = new Font("Segoe UI", 8f, FontStyle.Italic),
+		ForeColor = Color.FromArgb(120, 120, 140),
+		TextAlign = ContentAlignment.MiddleLeft
+	};
 
-	private static Panel MakeDivider()
+	private static Panel MakeDivider() => new()
 	{
-		return new Panel
-		{
-			Width = 510,
-			Height = 1,
-			BackColor = Color.FromArgb(210, 210, 220),
-			Margin = new Padding(0, 6, 0, 6)
-		};
-	}
+		Width = 510,
+		Height = 1,
+		BackColor = Color.FromArgb(210, 210, 220),
+		Margin = new Padding(0, 5, 0, 5)
+	};
 
-	// ── İş hesap yardımcıları ────────────────────────────────
+	// ── İş hesap yardımcıları ─────────────────────────────────
 
-	private static decimal CalculateMtvBase(int vehicleYear)
+	/// <summary>
+	/// Motor hacmine ve araç yaşına göre MTV hesaplar.
+	/// Gerçek MTV kademelerine yakın temsili değerler.
+	/// </summary>
+	private static decimal CalculateMtvByEngine(double engineVolume, int vehicleYear)
 	{
-		// MTV araç yaşına ve (temsili) motor hacmine göre değişir
-		// Motor hacmi bilinmediği için segment tahmini yapılır
 		int age = DateTime.Now.Year - vehicleYear;
-		return age switch
+
+		// Motor hacmi kademesi
+		decimal baseByEngine = engineVolume switch
 		{
-			<= 3 => 18_000m,
-			<= 7 => 12_000m,
-			<= 15 => 6_000m,
-			_ => 3_500m
+			<= 0 => 3_500m,   // Elektrikli — düşük MTV
+			<= 1.3 => 4_800m,
+			<= 1.6 => 8_200m,
+			<= 2.0 => 14_500m,
+			<= 2.5 => 22_000m,
+			_ => 35_000m
 		};
+
+		// Araç yaşlandıkça MTV azalır
+		decimal ageFactor = age switch
+		{
+			<= 3 => 1.00m,
+			<= 7 => 0.80m,
+			<= 11 => 0.65m,
+			<= 15 => 0.50m,
+			_ => 0.35m
+		};
+
+		return Math.Round(baseByEngine * ageFactor, 0);
 	}
 
 	private static decimal CalculateInsuranceBase(int vehicleYear)
@@ -540,7 +584,7 @@ public class SimulatorForm : Form
 		};
 	}
 
-	// ── Input row yardımcısı ─────────────────────────────────
+	// ── Input row yardımcısı ──────────────────────────────────
 
 	private void AddInputRow(int row, string labelText, Control input)
 	{
@@ -555,18 +599,20 @@ public class SimulatorForm : Form
 			Margin = new Padding(0, 6, 8, 0)
 		};
 		input.Margin = new Padding(0, 6, 0, 0);
-
 		_inputLayout.Controls.Add(lbl, 0, row);
 		_inputLayout.Controls.Add(input, 1, row);
 	}
 }
 
-// ── Sonuç veri modeli (record) ────────────────────────────────
-// Bu model sadece UI içinde kullanılır, veritabanına yazılmaz.
+// ── Genişletilmiş SimulationResult ───────────────────────────
 internal record SimulationResult(
 	string ModelLabel,
 	int Year,
 	double AnnualKm,
+	double EngineVolume,
+	int WeightKg,
+	double AvgConsumption,
+	bool IsElectric,
 	decimal FuelBase,
 	decimal FuelTax,
 	decimal FuelTotal,

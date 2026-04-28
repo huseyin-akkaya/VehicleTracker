@@ -7,27 +7,24 @@ using VehicleTracker.Entities;
 
 namespace VehicleTracker.Business.Sync;
 
-/// <summary>
-/// Uygulama açılışında çağrılır.
-/// İnternet varsa uzak JSON'dan marka/vergi verilerini çeker ve Upsert yapar.
-/// İnternet yoksa veya herhangi bir hata oluşursa sessizce yerel veriyle devam eder.
-/// </summary>
 public class SyncManager
 {
 	private readonly HttpClient _httpClient;
 	private readonly VehicleBrandRepository _brandRepository;
+	private readonly VehicleModelRepository _modelRepository;   // ← YENİ
 	private readonly GenericRepository<Setting> _settingRepository;
 
-	// Senkronizasyon durumunu UI'ya bildirmek için event
 	public event EventHandler<SyncResultEventArgs>? SyncCompleted;
 
 	public SyncManager(
 		HttpClient httpClient,
 		VehicleBrandRepository brandRepository,
+		VehicleModelRepository modelRepository,    // ← YENİ
 		GenericRepository<Setting> settingRepository)
 	{
 		_httpClient = httpClient;
 		_brandRepository = brandRepository;
+		_modelRepository = modelRepository;
 		_settingRepository = settingRepository;
 	}
 
@@ -37,7 +34,6 @@ public class SyncManager
 	{
 		try
 		{
-			// ADIM 1 — Bağlantı kontrolü
 			bool isOnline = await CheckConnectivityAsync();
 			if (!isOnline)
 			{
@@ -45,7 +41,6 @@ public class SyncManager
 				return;
 			}
 
-			// ADIM 2 — Sync URL'yi oku
 			string? syncUrl = await GetSettingValueAsync("SyncUrl");
 			if (string.IsNullOrWhiteSpace(syncUrl))
 			{
@@ -53,7 +48,6 @@ public class SyncManager
 				return;
 			}
 
-			// ADIM 3 — Uzak JSON'u indir
 			RemoteSyncData? remoteData = await FetchRemoteDataAsync(syncUrl);
 			if (remoteData is null)
 			{
@@ -61,30 +55,32 @@ public class SyncManager
 				return;
 			}
 
-			// ADIM 4 — Versiyon karşılaştır
-			int localVersion = int.TryParse(await GetSettingValueAsync("LastSyncVersion"), out int v) ? v : 0;
+			int localVersion = int.TryParse(
+				await GetSettingValueAsync("LastSyncVersion"), out int v) ? v : 0;
+
 			if (remoteData.Version <= localVersion)
 			{
-				OnSyncCompleted(SyncStatus.UpToDate, $"Veri güncel (versiyon {localVersion}), senkronizasyon atlandı.");
+				OnSyncCompleted(SyncStatus.UpToDate,
+					$"Veri güncel (versiyon {localVersion}), senkronizasyon atlandı.");
 				return;
 			}
 
-			// ADIM 5 — Marka listesini upsert et
 			int brandCount = await UpsertBrandsAsync(remoteData.Brands);
-
-			// ADIM 6 — Vergi katsayılarını upsert et
+			int modelCount = await UpsertModelsAsync(remoteData.Models);    // ← YENİ
 			int coeffCount = await UpsertTaxCoefficientsAsync(remoteData.TaxCoefficients);
 
-			// ADIM 7 — Meta verileri güncelle
 			await UpdateSyncMetaAsync(remoteData.Version);
 
-			string message = $"Senkronizasyon tamamlandı — {brandCount} marka, {coeffCount} katsayı güncellendi.";
+			string message =
+				$"Senkronizasyon tamamlandı — " +
+				$"{brandCount} marka, {modelCount} model, {coeffCount} katsayı güncellendi.";
+
 			OnSyncCompleted(SyncStatus.Success, message);
 		}
 		catch (Exception ex)
 		{
-			// Herhangi bir beklenmedik hata → sessizce yerel moda geç
-			OnSyncCompleted(SyncStatus.Failed, $"Senkronizasyon hatası (yerel verilerle devam): {ex.Message}");
+			OnSyncCompleted(SyncStatus.Failed,
+				$"Senkronizasyon hatası (yerel verilerle devam): {ex.Message}");
 		}
 	}
 
@@ -96,19 +92,15 @@ public class SyncManager
 		{
 			using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
 			var response = await _httpClient.GetAsync(
-				"https://www.gstatic.com/generate_204",  // Google'ın bağlantı-test endpointi
+				"https://www.gstatic.com/generate_204",
 				HttpCompletionOption.ResponseHeadersRead,
-				cts.Token
-			);
+				cts.Token);
 			return response.IsSuccessStatusCode || (int)response.StatusCode == 204;
 		}
-		catch
-		{
-			return false;
-		}
+		catch { return false; }
 	}
 
-	// ── Uzak JSON indirme ─────────────────────────────────────
+	// ── JSON indirme ──────────────────────────────────────────
 
 	private async Task<RemoteSyncData?> FetchRemoteDataAsync(string url)
 	{
@@ -116,16 +108,10 @@ public class SyncManager
 		{
 			using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 			string jsonText = await _httpClient.GetStringAsync(url, cts.Token);
-
-			return JsonSerializer.Deserialize<RemoteSyncData>(jsonText, new JsonSerializerOptions
-			{
-				PropertyNameCaseInsensitive = true
-			});
+			return JsonSerializer.Deserialize<RemoteSyncData>(jsonText,
+				new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 		}
-		catch
-		{
-			return null;
-		}
+		catch { return null; }
 	}
 
 	// ── Marka upsert ──────────────────────────────────────────
@@ -142,12 +128,9 @@ public class SyncManager
 			if (string.IsNullOrWhiteSpace(remote.Id) || string.IsNullOrWhiteSpace(remote.Name))
 				continue;
 
-			// RemoteId'ye göre yerel kaydı bul
 			var local = localBrands.FirstOrDefault(b => b.RemoteId == remote.Id);
-
 			if (local is not null)
 			{
-				// Güncelle
 				local.Name = remote.Name;
 				local.Country = remote.Country;
 				local.SyncedAt = DateTime.UtcNow;
@@ -155,7 +138,6 @@ public class SyncManager
 			}
 			else
 			{
-				// Yeni ekle
 				await _brandRepository.AddAsync(new VehicleBrand
 				{
 					Name = remote.Name,
@@ -164,11 +146,70 @@ public class SyncManager
 					SyncedAt = DateTime.UtcNow
 				});
 			}
-
 			count++;
 		}
 
 		await _brandRepository.SaveChangesAsync();
+		return count;
+	}
+
+	// ── Model upsert — YENİ ───────────────────────────────────
+
+	private async Task<int> UpsertModelsAsync(IList<RemoteModel>? remoteModels)
+	{
+		if (remoteModels is null || remoteModels.Count == 0) return 0;
+
+		// Güncel marka listesini çek — BrandRemoteId → Brand.Id eşlemesi için
+		var localBrands = await _brandRepository.GetAllAsync();
+		var brandIdMap = localBrands
+			.Where(b => b.RemoteId != null)
+			.ToDictionary(b => b.RemoteId!, b => b.Id);
+
+		var localModels = await _modelRepository.GetAllAsync();
+		int count = 0;
+
+		foreach (var remote in remoteModels)
+		{
+			if (string.IsNullOrWhiteSpace(remote.Id)
+				|| string.IsNullOrWhiteSpace(remote.Name)
+				|| string.IsNullOrWhiteSpace(remote.BrandId))
+				continue;
+
+			// Markanın yerel DB'deki Id'sini bul
+			if (!brandIdMap.TryGetValue(remote.BrandId, out int localBrandId))
+				continue; // İlgili marka DB'de yoksa modeli atla
+
+			var local = localModels.FirstOrDefault(m => m.RemoteId == remote.Id);
+
+			if (local is not null)
+			{
+				// Güncelle
+				local.Name = remote.Name;
+				local.BrandId = localBrandId;
+				local.EngineVolume = remote.EngineVolume;
+				local.WeightKg = remote.WeightKg;
+				local.AvgFuelConsumption = remote.AvgFuelConsumption;
+				local.SyncedAt = DateTime.UtcNow;
+				await _modelRepository.UpdateAsync(local);
+			}
+			else
+			{
+				// Yeni ekle
+				await _modelRepository.AddAsync(new VehicleModel
+				{
+					Name = remote.Name,
+					BrandId = localBrandId,
+					EngineVolume = remote.EngineVolume,
+					WeightKg = remote.WeightKg,
+					AvgFuelConsumption = remote.AvgFuelConsumption,
+					RemoteId = remote.Id,
+					SyncedAt = DateTime.UtcNow
+				});
+			}
+			count++;
+		}
+
+		await _modelRepository.SaveChangesAsync();
 		return count;
 	}
 
@@ -179,14 +220,13 @@ public class SyncManager
 	{
 		if (coefficients is null || coefficients.Count == 0) return 0;
 
-		// JSON anahtarı → Settings tablosu anahtarı eşlemesi
 		var keyMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 		{
 			{ "fuel",        "TaxCoeff_Fuel"     },
 			{ "maintenance", "TaxCoeff_Maintain" },
 			{ "tax",         "TaxCoeff_Tax"       },
 			{ "insurance",   "TaxCoeff_Insure"   },
-			{ "other",       "TaxCoeff_Other"    },
+			{ "other",       "TaxCoeff_Other"    }
 		};
 
 		var allSettings = await _settingRepository.GetAllAsync();
@@ -197,10 +237,11 @@ public class SyncManager
 			if (!keyMap.TryGetValue(jsonKey, out string? settingKey)) continue;
 
 			var setting = allSettings.FirstOrDefault(s => s.Key == settingKey);
+			string strValue = value.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
 			if (setting is not null)
 			{
-				setting.Value = value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+				setting.Value = strValue;
 				setting.UpdatedAt = DateTime.UtcNow;
 				await _settingRepository.UpdateAsync(setting);
 			}
@@ -209,12 +250,11 @@ public class SyncManager
 				await _settingRepository.AddAsync(new Setting
 				{
 					Key = settingKey,
-					Value = value.ToString(System.Globalization.CultureInfo.InvariantCulture),
-					Description = $"Uzak kaynaktan senkronize edildi ({jsonKey})",
+					Value = strValue,
+					Description = $"Uzak kaynaktan senkronize ({jsonKey})",
 					UpdatedAt = DateTime.UtcNow
 				});
 			}
-
 			count++;
 		}
 
@@ -222,14 +262,13 @@ public class SyncManager
 		return count;
 	}
 
-	// ── Meta veri güncelleme ──────────────────────────────────
+	// ── Meta güncelleme ───────────────────────────────────────
 
 	private async Task UpdateSyncMetaAsync(int newVersion)
 	{
 		await UpsertSingleSettingAsync("LastSyncVersion", newVersion.ToString());
 		await UpsertSingleSettingAsync("LastSyncAt",
 			DateTime.UtcNow.ToString("o", System.Globalization.CultureInfo.InvariantCulture));
-
 		await _settingRepository.SaveChangesAsync();
 	}
 
@@ -247,11 +286,7 @@ public class SyncManager
 		else
 		{
 			await _settingRepository.AddAsync(new Setting
-			{
-				Key = key,
-				Value = value,
-				UpdatedAt = DateTime.UtcNow
-			});
+			{ Key = key, Value = value, UpdatedAt = DateTime.UtcNow });
 		}
 	}
 
@@ -261,15 +296,11 @@ public class SyncManager
 		return all.FirstOrDefault(s => s.Key == key)?.Value;
 	}
 
-	// ── Event tetikleme ───────────────────────────────────────
-
 	private void OnSyncCompleted(SyncStatus status, string message)
 		=> SyncCompleted?.Invoke(this, new SyncResultEventArgs(status, message));
 }
 
-// ─────────────────────────────────────────────────────────────
-// Yardımcı tipler — aynı dosyada tutulabilir
-// ─────────────────────────────────────────────────────────────
+// ── DTO'lar ───────────────────────────────────────────────────
 
 public enum SyncStatus { Success, UpToDate, Offline, Skipped, Failed }
 
@@ -279,10 +310,6 @@ public class SyncResultEventArgs(SyncStatus status, string message) : EventArgs
 	public string Message { get; } = message;
 }
 
-/// <summary>
-/// Uzak JSON yapısı.
-/// GitHub Gist'teki dosyanın bu şemaya uygun olması gerekir.
-/// </summary>
 internal class RemoteSyncData
 {
 	[JsonPropertyName("version")]
@@ -291,18 +318,26 @@ internal class RemoteSyncData
 	[JsonPropertyName("brands")]
 	public List<RemoteBrand> Brands { get; set; } = new();
 
+	[JsonPropertyName("models")]
+	public List<RemoteModel> Models { get; set; } = new();    // ← YENİ
+
 	[JsonPropertyName("taxCoefficients")]
 	public Dictionary<string, decimal> TaxCoefficients { get; set; } = new();
 }
 
 internal class RemoteBrand
 {
-	[JsonPropertyName("id")]
-	public string Id { get; set; } = string.Empty;
+	[JsonPropertyName("id")] public string Id { get; set; } = string.Empty;
+	[JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
+	[JsonPropertyName("country")] public string? Country { get; set; }
+}
 
-	[JsonPropertyName("name")]
-	public string Name { get; set; } = string.Empty;
-
-	[JsonPropertyName("country")]
-	public string? Country { get; set; }
+internal class RemoteModel                                      // ← YENİ
+{
+	[JsonPropertyName("id")] public string Id { get; set; } = string.Empty;
+	[JsonPropertyName("brandId")] public string BrandId { get; set; } = string.Empty;
+	[JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
+	[JsonPropertyName("engineVolume")] public double EngineVolume { get; set; }
+	[JsonPropertyName("weightKg")] public int WeightKg { get; set; }
+	[JsonPropertyName("avgFuelConsumption")] public double AvgFuelConsumption { get; set; }
 }
