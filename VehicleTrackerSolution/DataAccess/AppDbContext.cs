@@ -41,7 +41,7 @@ public class AppDbContext : DbContext
 
 		SeedData(modelBuilder);
 	}
-
+	
 	// ── VehicleBrand — değişmedi ──────────────────────────────
 	private static void ConfigureVehicleBrand(ModelBuilder mb)
 	{
@@ -107,19 +107,31 @@ public class AppDbContext : DbContext
 		{
 			entity.ToTable("Vehicles");
 			entity.HasKey(e => e.Id);
-			entity.Property(e => e.Plate).IsRequired().HasMaxLength(20);
+
+			entity.Property(e => e.Plate)
+				  .IsRequired()
+				  .HasMaxLength(20);
 			entity.HasIndex(e => e.Plate).IsUnique();
-			entity.Property(e => e.ModelName).IsRequired().HasMaxLength(100);
+
 			entity.Property(e => e.Year).IsRequired();
 			entity.Property(e => e.CurrentKm).HasDefaultValue(0.0);
 			entity.Property(e => e.IsActive).HasDefaultValue(true);
+
 			entity.Property(e => e.CreatedAt).IsRequired()
 				  .HasConversion(v => v.ToString("o"), v => DateTime.Parse(v));
 			entity.Property(e => e.UpdatedAt).IsRequired()
 				  .HasConversion(v => v.ToString("o"), v => DateTime.Parse(v));
+
+			// Vehicle → VehicleBrand
 			entity.HasOne(e => e.Brand)
 				  .WithMany(b => b.Vehicles)
 				  .HasForeignKey(e => e.BrandId)
+				  .OnDelete(DeleteBehavior.Restrict);
+
+			// Vehicle → VehicleModel  ← YENİ
+			entity.HasOne(e => e.Model)
+				  .WithMany()
+				  .HasForeignKey(e => e.ModelId)
 				  .OnDelete(DeleteBehavior.Restrict);
 		});
 	}

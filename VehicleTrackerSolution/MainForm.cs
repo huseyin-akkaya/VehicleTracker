@@ -3,59 +3,60 @@
 using Microsoft.Extensions.DependencyInjection;
 using VehicleTracker.Business.Services;
 using VehicleTracker.Business.Sync;
-using VehicleTracker.Entities;
+using VehicleTracker.DataAccess.Context;
+using VehicleTracker.DataAccess.Repositories;
 using VehicleTracker.UI.ViewModels;
 
 namespace VehicleTracker.UI;
 
 public class MainForm : Form
 {
-	// ── Bağımlılıklar ─────────────────────────────────────────
 	private readonly IVehicleService _vehicleService;
-	private readonly SyncManager _syncManager;
+	private readonly IExpenseService _expenseService;
+	private readonly TaxCalculatorService _taxCalculator;
 	private readonly IServiceProvider _serviceProvider;
 
-	// ── UI Bileşenleri ────────────────────────────────────────
+	// ── UI ────────────────────────────────────────────────────
+	private Panel _topPanel = null!;
+	private Label _lblTitle = null!;
+	private Button _btnAddVehicle = null!;
+	private Button _btnAddExpense = null!;
+	private Button _btnViewHistory = null!;
+	private Button _btnRefresh = null!;
 	private DataGridView _gridVehicles = null!;
 	private StatusStrip _statusStrip = null!;
 	private ToolStripStatusLabel _lblSyncStatus = null!;
 	private ToolStripStatusLabel _lblRecordCount = null!;
-	private Panel _topPanel = null!;
 
-	// BUTONLAR (Sadece 1'er kere tanımlandı)
-	private Button _btnRefresh = null!;
-	private Button _btnAddVehicle = null!;
-	private Button _btnAddExpense = null!;
-	private Button _btnSimulator = null!;
-	private Label _lblTitle = null!;
+	// ── Özet Paneli ───────────────────────────────────────────
+	private Panel _summaryPanel = null!;
+	private Label _lblRealExpense = null!;
+	private Label _lblEstimatedExpense = null!;
 
 	public MainForm(
 		IVehicleService vehicleService,
-		SyncManager syncManager,
+		IExpenseService expenseService,
+		TaxCalculatorService taxCalculator,
 		IServiceProvider serviceProvider)
 	{
 		_vehicleService = vehicleService;
-		_syncManager = syncManager;
+		_expenseService = expenseService;
+		_taxCalculator = taxCalculator;
 		_serviceProvider = serviceProvider;
 
-		_syncManager.SyncCompleted += OnSyncCompleted;
 		InitializeComponents();
 	}
 
-	// ─────────────────────────────────────────────────────────
-	//  Bileşen oluşturma — Designer yerine tam kod
-	// ─────────────────────────────────────────────────────────
 	private void InitializeComponents()
 	{
-		// ── Form ayarları ─────────────────────────────────────
-		Text = "Araç Takip Sistemi";
-		Size = new Size(1000, 640);
-		MinimumSize = new Size(800, 500);
+		Text = "Araçlarım ve Giderler";
+		Size = new Size(1020, 660);
+		MinimumSize = new Size(800, 520);
 		StartPosition = FormStartPosition.CenterScreen;
 		BackColor = Color.FromArgb(245, 245, 245);
 		Font = new Font("Segoe UI", 9.5f);
 
-		// ── Üst panel (başlık + butonlar) ─────────────────────
+		// ── Top Panel ─────────────────────────────────────────
 		_topPanel = new Panel
 		{
 			Dock = DockStyle.Top,
@@ -66,84 +67,67 @@ public class MainForm : Form
 
 		_lblTitle = new Label
 		{
-			Text = "🚗  Araç Takip Sistemi",
+			Text = "🚗  Araçlarım",
 			ForeColor = Color.White,
 			Font = new Font("Segoe UI", 13f, FontStyle.Bold),
 			AutoSize = true,
 			Location = new Point(16, 18)
 		};
 
-		_btnAddVehicle = new Button
-		{
-			Text = "+ Araç Ekle",
-			Size = new Size(110, 34),
-			BackColor = Color.FromArgb(72, 199, 142),
-			ForeColor = Color.White,
-			FlatStyle = FlatStyle.Flat,
-			Font = new Font("Segoe UI", 9f, FontStyle.Bold),
-			Cursor = Cursors.Hand,
-			Anchor = AnchorStyles.Right | AnchorStyles.Top
-		};
-		_btnAddVehicle.FlatAppearance.BorderSize = 0;
+		_btnRefresh = MakeTopButton("↻  Yenile", Color.FromArgb(52, 152, 219));
+		_btnAddVehicle = MakeTopButton("+ Araç Ekle", Color.FromArgb(72, 199, 142));
+		_btnAddExpense = MakeTopButton("+ Gider Ekle", Color.FromArgb(231, 76, 60));
+		_btnViewHistory = MakeTopButton("📋 Gider Geçmişi", Color.FromArgb(22, 160, 133));
 
-		_btnRefresh = new Button
-		{
-			Text = "↻  Yenile",
-			Size = new Size(100, 34),
-			BackColor = Color.FromArgb(52, 152, 219),
-			ForeColor = Color.White,
-			FlatStyle = FlatStyle.Flat,
-			Font = new Font("Segoe UI", 9f, FontStyle.Bold),
-			Cursor = Cursors.Hand,
-			Anchor = AnchorStyles.Right | AnchorStyles.Top
-		};
-		_btnRefresh.FlatAppearance.BorderSize = 0;
-
-		_btnAddExpense = new Button
-		{
-			Text = "+ Gider Ekle",
-			Size = new Size(110, 34),
-			BackColor = Color.FromArgb(231, 76, 60),
-			ForeColor = Color.White,
-			FlatStyle = FlatStyle.Flat,
-			Font = new Font("Segoe UI", 9f, FontStyle.Bold),
-			Cursor = Cursors.Hand,
-			Anchor = AnchorStyles.Right | AnchorStyles.Top
-		};
-		_btnAddExpense.FlatAppearance.BorderSize = 0;
-
-		_btnSimulator = new Button
-		{
-			Text = "🧮 Simülatör",
-			Size = new Size(120, 34),
-			BackColor = Color.FromArgb(142, 68, 173),
-			ForeColor = Color.White,
-			FlatStyle = FlatStyle.Flat,
-			Font = new Font("Segoe UI", 9f, FontStyle.Bold),
-			Cursor = Cursors.Hand,
-			Anchor = AnchorStyles.Right | AnchorStyles.Top
-		};
-		_btnSimulator.FlatAppearance.BorderSize = 0;
-
-		// TEK BİR Ekleme İşlemi (Çakışmalar silindi)
 		_topPanel.Controls.AddRange(new Control[]
-		{
-			_lblTitle, _btnSimulator, _btnAddExpense, _btnAddVehicle, _btnRefresh
-		});
+			{ _lblTitle, _btnViewHistory, _btnAddExpense, _btnAddVehicle, _btnRefresh });
 
-		// TEK BİR Resize İşlemi (4 buton hizalaması)
 		_topPanel.Resize += (_, _) =>
 		{
 			_btnRefresh.Left = _topPanel.Width - _btnRefresh.Width - 16;
 			_btnAddVehicle.Left = _btnRefresh.Left - _btnAddVehicle.Width - 8;
 			_btnAddExpense.Left = _btnAddVehicle.Left - _btnAddExpense.Width - 8;
-			_btnSimulator.Left = _btnAddExpense.Left - _btnSimulator.Width - 8;
+			_btnViewHistory.Left = _btnAddExpense.Left - _btnViewHistory.Width - 8;
 
-			foreach (Control btn in new[] { _btnRefresh, _btnAddVehicle, _btnAddExpense, _btnSimulator })
+			foreach (Control btn in new Control[]
+				{ _btnRefresh, _btnAddVehicle, _btnAddExpense, _btnViewHistory })
 				btn.Top = (_topPanel.Height - btn.Height) / 2;
 		};
 
-		// ── DataGridView ──────────────────────────────────────
+		// ── Özet Paneli ───────────────────────────────────────
+		_summaryPanel = new Panel
+		{
+			Dock = DockStyle.Bottom,
+			Height = 56,
+			BackColor = Color.FromArgb(28, 38, 68),
+			Padding = new Padding(20, 0, 20, 0)
+		};
+
+		_lblRealExpense = new Label
+		{
+			Text = "💰  Toplam Gerçekleşen Masraf:  —",
+			ForeColor = Color.FromArgb(130, 200, 255),
+			Font = new Font("Segoe UI", 10f, FontStyle.Bold),
+			AutoSize = false,
+			Width = 400,
+			Dock = DockStyle.Left,
+			TextAlign = ContentAlignment.MiddleLeft
+		};
+
+		_lblEstimatedExpense = new Label
+		{
+			Text = "🧮  Tahmini Yıllık Toplam:  —",
+			ForeColor = Color.FromArgb(160, 230, 180),
+			Font = new Font("Segoe UI", 10f, FontStyle.Bold),
+			AutoSize = false,
+			Dock = DockStyle.Fill,
+			TextAlign = ContentAlignment.MiddleRight
+		};
+
+		_summaryPanel.Controls.Add(_lblRealExpense);
+		_summaryPanel.Controls.Add(_lblEstimatedExpense);
+
+		// ── Grid ──────────────────────────────────────────────
 		_gridVehicles = new DataGridView
 		{
 			Dock = DockStyle.Fill,
@@ -155,9 +139,9 @@ public class MainForm : Form
 			ReadOnly = true,
 			SelectionMode = DataGridViewSelectionMode.FullRowSelect,
 			AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
-			GridColor = Color.FromArgb(230, 230, 230),
-			Font = new Font("Segoe UI", 9.5f),
-			CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal
+			GridColor = Color.FromArgb(230, 230, 235),
+			CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal,
+			Font = new Font("Segoe UI", 9.5f)
 		};
 
 		_gridVehicles.ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
@@ -168,121 +152,115 @@ public class MainForm : Form
 			Padding = new Padding(6, 0, 0, 0)
 		};
 		_gridVehicles.ColumnHeadersHeight = 38;
-		_gridVehicles.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+		_gridVehicles.ColumnHeadersHeightSizeMode =
+			DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
 		_gridVehicles.EnableHeadersVisualStyles = false;
 
-		_gridVehicles.AlternatingRowsDefaultCellStyle = new DataGridViewCellStyle
-		{
-			BackColor = Color.FromArgb(248, 249, 252)
-		};
 		_gridVehicles.DefaultCellStyle = new DataGridViewCellStyle
 		{
 			SelectionBackColor = Color.FromArgb(210, 228, 255),
 			SelectionForeColor = Color.FromArgb(20, 20, 20),
 			Padding = new Padding(4, 0, 0, 0)
 		};
+		_gridVehicles.AlternatingRowsDefaultCellStyle =
+			new DataGridViewCellStyle { BackColor = Color.FromArgb(248, 249, 252) };
 		_gridVehicles.RowTemplate.Height = 36;
 
 		ConfigureGridColumns();
 
-		// ── Status Strip ──────────────────────────────────────
+		// ── StatusStrip ───────────────────────────────────────
 		_statusStrip = new StatusStrip
 		{
 			BackColor = Color.FromArgb(235, 235, 240),
 			SizingGrip = false
 		};
-
 		_lblSyncStatus = new ToolStripStatusLabel
 		{
-			Text = "⏳  Senkronizasyon bekleniyor...",
+			Text = "Hazır",
 			ForeColor = Color.FromArgb(80, 80, 100),
 			Font = new Font("Segoe UI", 8.5f)
 		};
-
-		var spacer = new ToolStripStatusLabel { Spring = true };
-
 		_lblRecordCount = new ToolStripStatusLabel
 		{
 			Text = "Araç: —",
 			ForeColor = Color.FromArgb(80, 80, 100),
 			Font = new Font("Segoe UI", 8.5f)
 		};
-
 		_statusStrip.Items.AddRange(new ToolStripItem[]
 		{
-			_lblSyncStatus,
-			spacer,
-			_lblRecordCount
+			_lblSyncStatus, new ToolStripStatusLabel { Spring = true }, _lblRecordCount
 		});
 
-		// ── Layout ────────────────────────────────────────────
+		// ── Yerleşim ──────────────────────────────────────────
 		Controls.Add(_gridVehicles);
+		Controls.Add(_summaryPanel);
 		Controls.Add(_statusStrip);
 		Controls.Add(_topPanel);
 
-		// ── Event bağlantıları ────────────────────────────────
+		// ── Events ────────────────────────────────────────────
+		Load += async (_, _) => await LoadVehiclesAsync();
 		_btnRefresh.Click += async (_, _) => await LoadVehiclesAsync();
 		_btnAddVehicle.Click += OnAddVehicleClicked;
 		_btnAddExpense.Click += OnAddExpenseClicked;
-		_btnSimulator.Click += OnSimulatorClicked;
-		Load += OnFormLoad;
+		_btnViewHistory.Click += OnViewHistoryClicked;
 	}
 
 	private void ConfigureGridColumns()
 	{
 		_gridVehicles.AutoGenerateColumns = false;
 		_gridVehicles.Columns.Clear();
-
 		_gridVehicles.Columns.AddRange(
-			new DataGridViewTextBoxColumn { DataPropertyName = "Id", HeaderText = "ID", Width = 50, FillWeight = 5 },
-			new DataGridViewTextBoxColumn { DataPropertyName = "Plate", HeaderText = "Plaka", FillWeight = 15 },
-			new DataGridViewTextBoxColumn { DataPropertyName = "BrandName", HeaderText = "Marka", FillWeight = 18 },
-			new DataGridViewTextBoxColumn { DataPropertyName = "ModelName", HeaderText = "Model", FillWeight = 20 },
-			new DataGridViewTextBoxColumn { DataPropertyName = "Year", HeaderText = "Yıl", FillWeight = 10 },
-			new DataGridViewTextBoxColumn { DataPropertyName = "CurrentKmFormatted", HeaderText = "Kilometre", FillWeight = 15, DefaultCellStyle = new DataGridViewCellStyle { Alignment = DataGridViewContentAlignment.MiddleRight } },
-			new DataGridViewTextBoxColumn { DataPropertyName = "IsActiveText", HeaderText = "Durum", FillWeight = 12 }
+			new DataGridViewTextBoxColumn
+			{ DataPropertyName = "Id", HeaderText = "ID", FillWeight = 5 },
+			new DataGridViewTextBoxColumn
+			{ DataPropertyName = "Plate", HeaderText = "Plaka", FillWeight = 15 },
+			new DataGridViewTextBoxColumn
+			{ DataPropertyName = "BrandName", HeaderText = "Marka", FillWeight = 18 },
+			new DataGridViewTextBoxColumn
+			{ DataPropertyName = "ModelName", HeaderText = "Model", FillWeight = 20 },
+			new DataGridViewTextBoxColumn
+			{ DataPropertyName = "Year", HeaderText = "Yıl", FillWeight = 10 },
+			new DataGridViewTextBoxColumn
+			{
+				DataPropertyName = "CurrentKmFormatted",
+				HeaderText = "Kilometre",
+				FillWeight = 15,
+				DefaultCellStyle = new DataGridViewCellStyle
+				{ Alignment = DataGridViewContentAlignment.MiddleRight }
+			},
+			new DataGridViewTextBoxColumn
+			{ DataPropertyName = "IsActiveText", HeaderText = "Durum", FillWeight = 12 }
 		);
 	}
 
-	private async void OnFormLoad(object? sender, EventArgs e)
-	{
-		SetStatus("⏳  Senkronizasyon başlatılıyor...", Color.FromArgb(180, 140, 0));
-		SetUiEnabled(false);
-
-		try
-		{
-			await _syncManager.SynchronizeAsync();
-			await LoadVehiclesAsync();
-		}
-		finally
-		{
-			SetUiEnabled(true);
-		}
-	}
-
+	// ─────────────────────────────────────────────────────────
+	//  Araçları yükle + özet hesapla
+	// ─────────────────────────────────────────────────────────
 	private async Task LoadVehiclesAsync()
 	{
+		_btnRefresh.Enabled = false;
+		_btnRefresh.Text = "⏳";
+
 		try
 		{
-			_btnRefresh.Enabled = false;
-			_btnRefresh.Text = "⏳  Yükleniyor...";
+			var vehicles = await _vehicleService.GetAllVehiclesAsync();
 
-			IList<Vehicle> vehicles = await _vehicleService.GetAllVehiclesAsync();
+			var viewModels = vehicles
+				.Select(v => new VehicleViewModel(v))
+				.ToList();
 
-			var viewModels = vehicles.Select(v => new VehicleViewModel(v)).ToList();
+			_gridVehicles.DataSource =
+				new System.Windows.Forms.BindingSource { DataSource = viewModels };
 
-			if (InvokeRequired)
-			{
-				Invoke(() => BindGrid(viewModels));
-			}
-			else
-			{
-				BindGrid(viewModels);
-			}
+			_lblRecordCount.Text = $"Araç: {viewModels.Count}";
+
+			// Özet panelini güncelle
+			await UpdateSummaryAsync(vehicles);
 		}
 		catch (Exception ex)
 		{
-			MessageBox.Show($"Araçlar yüklenirken hata oluştu:\n{ex.Message}", "Yükleme Hatası", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+			MessageBox.Show($"Araçlar yüklenirken hata:\n{ex.Message}",
+				"Hata", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 		}
 		finally
 		{
@@ -291,93 +269,143 @@ public class MainForm : Form
 		}
 	}
 
-	private void BindGrid(IList<VehicleViewModel> viewModels)
+	// ─────────────────────────────────────────────────────────
+	//  Özet paneli hesaplama
+	// ─────────────────────────────────────────────────────────
+	private async Task UpdateSummaryAsync(IList<VehicleTracker.Entities.Vehicle> vehicles)
 	{
-		_gridVehicles.DataSource = null;
-		_gridVehicles.DataSource = new BindingSource { DataSource = viewModels };
-		_lblRecordCount.Text = $"Araç: {viewModels.Count}";
-	}
-
-	private void OnSyncCompleted(object? sender, SyncResultEventArgs e)
-	{
-		if (InvokeRequired)
+		try
 		{
-			Invoke(() => ApplySyncResult(e));
-			return;
+			// 1 — Tüm araçların gerçek gider toplamı
+			decimal realTotal = 0m;
+			foreach (var v in vehicles)
+			{
+				var expenses = await _expenseService.GetExpensesByVehicleAsync(v.Id);
+				realTotal += expenses.Sum(e => e.Amount);
+			}
+
+			// 2 — Her araç için TaxCalculator ile tahmini yıllık maliyet
+			decimal estimatedTotal = 0m;
+			const double annualKm = 15_000;
+			const decimal fuelPrice = 42m;
+
+			foreach (var v in vehicles)
+			{
+				if (v.Model is null) continue;
+
+				bool isElectric = v.Model.AvgFuelConsumption <= 0;
+
+				// Yakıt
+				if (!isElectric)
+				{
+					decimal fuelBase = (decimal)(annualKm / 100.0
+						* v.Model.AvgFuelConsumption) * fuelPrice;
+					decimal fuelTax = await _taxCalculator
+						.CalculateTaxAsync(fuelBase, "Yakıt", v.Year);
+					estimatedTotal += fuelBase + fuelTax;
+				}
+
+				// Bakım
+				decimal maintBase = 8_000m;
+				decimal maintTax = await _taxCalculator
+					.CalculateTaxAsync(maintBase, "Bakım", v.Year);
+				estimatedTotal += maintBase + maintTax;
+
+				// MTV (motor hacmine göre)
+				decimal mtvBase = v.Model.EngineVolume switch
+				{
+					<= 0 => 3_500m,
+					<= 1.3 => 4_800m,
+					<= 1.6 => 8_200m,
+					<= 2.0 => 14_500m,
+					_ => 22_000m
+				};
+				decimal mtvTax = await _taxCalculator
+					.CalculateTaxAsync(mtvBase, "Vergi", v.Year);
+				estimatedTotal += mtvBase + mtvTax;
+
+				// Sigorta (yaşa göre)
+				int age = DateTime.Now.Year - v.Year;
+				decimal insBase = age switch
+				{
+					<= 3 => 20_000m,
+					<= 7 => 15_000m,
+					<= 15 => 10_000m,
+					_ => 7_000m
+				};
+				decimal insTax = await _taxCalculator
+					.CalculateTaxAsync(insBase, "Sigorta", v.Year);
+				estimatedTotal += insBase + insTax;
+			}
+
+			_lblRealExpense.Text =
+				$"💰  Toplam Gerçekleşen Masraf:  {realTotal:N2} ₺";
+			_lblEstimatedExpense.Text =
+				$"🧮  Tahmini Yıllık Toplam (tüm araçlar):  {estimatedTotal:N2} ₺";
 		}
-		ApplySyncResult(e);
-	}
-
-	private void ApplySyncResult(SyncResultEventArgs e)
-	{
-		var (icon, color) = e.Status switch
+		catch
 		{
-			SyncStatus.Success => ("✅", Color.FromArgb(30, 130, 80)),
-			SyncStatus.UpToDate => ("✅", Color.FromArgb(30, 130, 80)),
-			SyncStatus.Offline => ("📶", Color.FromArgb(150, 100, 0)),
-			SyncStatus.Skipped => ("⏭️", Color.FromArgb(80, 80, 80)),
-			SyncStatus.Failed => ("⚠️", Color.FromArgb(180, 50, 50)),
-			_ => ("ℹ️", Color.FromArgb(50, 100, 180))
-		};
-
-		SetStatus($"{icon}  {e.Message}", color);
+			// Özet hesaplanamasa bile araç listesi bozulmasın
+			_lblRealExpense.Text = "💰  Toplam Masraf: hesaplanamadı";
+			_lblEstimatedExpense.Text = "🧮  Tahmini Yıllık: hesaplanamadı";
+		}
 	}
 
+	// ─────────────────────────────────────────────────────────
+	//  Event handler'lar
+	// ─────────────────────────────────────────────────────────
 	private async void OnAddVehicleClicked(object? sender, EventArgs e)
 	{
 		using var form = _serviceProvider.GetRequiredService<VehicleForm>();
-		DialogResult result = form.ShowDialog(this);
-
-		if (result == DialogResult.OK && form.SavedVehicle is not null)
+		if (form.ShowDialog(this) == DialogResult.OK && form.SavedVehicle is not null)
 		{
 			await LoadVehiclesAsync();
-			SetStatus($"✅  '{form.SavedVehicle.Plate}' plakalı araç başarıyla eklendi.", Color.FromArgb(30, 130, 80));
+			SetStatus($"✅  '{form.SavedVehicle.Plate}' eklendi.",
+				Color.FromArgb(30, 130, 80));
 		}
 	}
 
 	private void OnAddExpenseClicked(object? sender, EventArgs e)
 	{
-		if (_gridVehicles.SelectedRows.Count == 0)
-		{
-			MessageBox.Show("Lütfen önce listeden bir araç seçin.", "Araç Seçilmedi", MessageBoxButtons.OK, MessageBoxIcon.Information);
-			return;
-		}
+		var vehicle = GetSelectedVehicle();
+		if (vehicle is null) return;
 
-		if (_gridVehicles.SelectedRows[0].DataBoundItem is not VehicleTracker.UI.ViewModels.VehicleViewModel vm)
-			return;
-
-		Vehicle? vehicle = Task.Run(() => _vehicleService.GetVehicleByIdAsync(vm.Id)).GetAwaiter().GetResult();
-
-		if (vehicle is null)
-		{
-			MessageBox.Show("Araç bulunamadı.", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-			return;
-		}
-
-		// KIRIK PARANTEZLER BURADA DÜZELTİLDİ
 		var expenseService = _serviceProvider.GetRequiredService<IExpenseService>();
-		var dbContext = _serviceProvider.GetRequiredService<VehicleTracker.DataAccess.Context.AppDbContext>();
+		var dbContext = _serviceProvider.GetRequiredService<AppDbContext>();
 
 		using var form = new ExpenseForm(expenseService, dbContext, vehicle);
-		DialogResult result = form.ShowDialog(this);
-
-		if (result == DialogResult.OK)
-		{
-			SetStatus($"✅  '{vehicle.Plate}' için gider başarıyla kaydedildi.", Color.FromArgb(30, 130, 80));
-		}
+		if (form.ShowDialog(this) == DialogResult.OK)
+			SetStatus($"✅  '{vehicle.Plate}' için gider kaydedildi.",
+				Color.FromArgb(30, 130, 80));
 	}
 
-	private void OnSimulatorClicked(object? sender, EventArgs e)
+	private void OnViewHistoryClicked(object? sender, EventArgs e)
 	{
-		var taxCalc = _serviceProvider.GetRequiredService<TaxCalculatorService>();
-		var brandRepo = _serviceProvider.GetRequiredService<VehicleTracker.DataAccess.Repositories.VehicleBrandRepository>();
+		var vehicle = GetSelectedVehicle();
+		if (vehicle is null) return;
 
-		// YENİ EKLENEN SATIR: Model Repository'i de DI Container'dan çekiyoruz
-		var modelRepo = _serviceProvider.GetRequiredService<VehicleTracker.DataAccess.Repositories.VehicleModelRepository>();
-
-		// 3. PARAMETREYİ EKLİYORUZ: modelRepo
-		using var form = new SimulatorForm(taxCalc, brandRepo, modelRepo);
+		var expenseService = _serviceProvider.GetRequiredService<IExpenseService>();
+		using var form = new ExpenseHistoryForm(expenseService, vehicle);
 		form.ShowDialog(this);
+	}
+
+	// ─────────────────────────────────────────────────────────
+	//  Yardımcılar
+	// ─────────────────────────────────────────────────────────
+	private VehicleTracker.Entities.Vehicle? GetSelectedVehicle()
+	{
+		if (_gridVehicles.SelectedRows.Count == 0)
+		{
+			MessageBox.Show("Lütfen önce listeden bir araç seçin.",
+				"Araç Seçilmedi", MessageBoxButtons.OK, MessageBoxIcon.Information);
+			return null;
+		}
+
+		if (_gridVehicles.SelectedRows[0].DataBoundItem is not VehicleViewModel vm)
+			return null;
+
+		return Task.Run(() =>
+			_vehicleService.GetVehicleByIdAsync(vm.Id)).GetAwaiter().GetResult();
 	}
 
 	private void SetStatus(string message, Color color)
@@ -386,17 +414,20 @@ public class MainForm : Form
 		_lblSyncStatus.ForeColor = color;
 	}
 
-	private void SetUiEnabled(bool enabled)
+	private static Button MakeTopButton(string text, Color color)
 	{
-		_btnAddVehicle.Enabled = enabled;
-		_btnRefresh.Enabled = enabled;
-	}
-
-	protected override void Dispose(bool disposing)
-	{
-		if (disposing)
-			_syncManager.SyncCompleted -= OnSyncCompleted;
-
-		base.Dispose(disposing);
+		var btn = new Button
+		{
+			Text = text,
+			Size = new Size(130, 34),
+			BackColor = color,
+			ForeColor = Color.White,
+			FlatStyle = FlatStyle.Flat,
+			Font = new Font("Segoe UI", 9f, FontStyle.Bold),
+			Cursor = Cursors.Hand,
+			Anchor = AnchorStyles.Right | AnchorStyles.Top
+		};
+		btn.FlatAppearance.BorderSize = 0;
+		return btn;
 	}
 }
