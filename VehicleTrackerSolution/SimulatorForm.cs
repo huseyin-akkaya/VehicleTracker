@@ -571,7 +571,6 @@ public class SimulatorForm : Form
 
 		return Math.Round(baseByEngine * ageFactor, 0);
 	}
-
 	private static decimal CalculateInsuranceBase(int vehicleYear)
 	{
 		int age = DateTime.Now.Year - vehicleYear;
