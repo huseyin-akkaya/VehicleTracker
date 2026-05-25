@@ -16,7 +16,7 @@ Bu yazılım, modern geliştirme süreçlerini deneyimlemek amacıyla yapay zeka
 
 ## 🛠️ Kullanılan Teknolojiler ve Mimari
 
-* **Dil / Framework:** C# 12, .NET 8.0 (Windows Forms)
+* **Dil / Framework:** C#, .NET 10.0 (Windows Forms)
 * **Veritabanı:** SQLite
 * **ORM:** Entity Framework Core (Code-First yaklaşımı ve Fluent API)
 * **Tasarım Deseni:** Dependency Injection (Microsoft.Extensions.DependencyInjection), Repository Pattern, N-Tier Architecture (Katmanlı Mimari)
