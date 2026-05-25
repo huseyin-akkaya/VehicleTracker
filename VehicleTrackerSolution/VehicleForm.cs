@@ -1,11 +1,13 @@
-﻿// --- UI/Forms/VehicleForm.cs ---
-
-using VehicleTracker.Business.Services;
+﻿using VehicleTracker.Business.Services;
 using VehicleTracker.DataAccess.Repositories;
 using VehicleTracker.Entities;
 
 namespace VehicleTracker.UI;
 
+/// <summary>
+/// Kullanıcının sisteme sahip olduğu veya takip etmek istediği yeni bir aracı eklemesini sağlayan giriş formudur.
+/// Marka seçimine bağlı olarak model listesini dinamik olarak filtreler (Kaskad Dropdown).
+/// </summary>
 public class VehicleForm : Form
 {
 	private readonly IVehicleService _vehicleService;
@@ -17,7 +19,7 @@ public class VehicleForm : Form
 	private Panel _footerPanel = null!;
 
 	private ComboBox _cmbBrand = null!;
-	private ComboBox _cmbModel = null!;   // ← TextBox yerine
+	private ComboBox _cmbModel = null!;
 	private TextBox _txtPlate = null!;
 	private NumericUpDown _numYear = null!;
 	private NumericUpDown _numKm = null!;
@@ -40,6 +42,9 @@ public class VehicleForm : Form
 		InitializeComponents();
 	}
 
+	/// <summary>
+	/// Yeni araç ekleme formunun görsel bileşenlerini (Inputlar, butonlar) programatik olarak oluşturur ve TableLayoutPanel içerisine yerleştirir.
+	/// </summary>
 	private void InitializeComponents()
 	{
 		Text = "Yeni Araç Ekle";
@@ -50,7 +55,6 @@ public class VehicleForm : Form
 		BackColor = Color.FromArgb(245, 245, 245);
 		Font = new Font("Segoe UI", 9.5f);
 
-		// ── Header ────────────────────────────────────────────
 		_headerPanel = new Panel
 		{
 			Dock = DockStyle.Top,
@@ -66,7 +70,6 @@ public class VehicleForm : Form
 			Location = new Point(20, 14)
 		});
 
-		// ── Layout ────────────────────────────────────────────
 		_layout = new TableLayoutPanel
 		{
 			Dock = DockStyle.Fill,
@@ -81,7 +84,6 @@ public class VehicleForm : Form
 			_layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 50f));
 		_layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
 
-		// Plaka
 		_txtPlate = new TextBox
 		{
 			CharacterCasing = CharacterCasing.Upper,
@@ -91,7 +93,6 @@ public class VehicleForm : Form
 			BackColor = Color.White
 		};
 
-		// Marka
 		_cmbBrand = new ComboBox
 		{
 			DropDownStyle = ComboBoxStyle.DropDownList,
@@ -102,7 +103,6 @@ public class VehicleForm : Form
 			FlatStyle = FlatStyle.Flat
 		};
 
-		// Model — başta pasif, marka seçilince dolacak
 		_cmbModel = new ComboBox
 		{
 			DropDownStyle = ComboBoxStyle.DropDownList,
@@ -114,7 +114,6 @@ public class VehicleForm : Form
 			Enabled = false
 		};
 
-		// Model ComboBox'ın altında küçük ipucu metni
 		_lblModelHint = new Label
 		{
 			Text = "Önce marka seçin",
@@ -124,7 +123,6 @@ public class VehicleForm : Form
 			Visible = true
 		};
 
-		// Üretim Yılı
 		_numYear = new NumericUpDown
 		{
 			Minimum = 1950,
@@ -134,7 +132,6 @@ public class VehicleForm : Form
 			BackColor = Color.White
 		};
 
-		// Kilometre
 		_numKm = new NumericUpDown
 		{
 			Minimum = 0,
@@ -151,10 +148,8 @@ public class VehicleForm : Form
 		AddRow(3, MakeLabel("Üretim Yılı *"), _numYear);
 		AddRow(4, MakeLabel("Başlangıç Km"), _numKm);
 
-		// Model ipucu — 3. satırın giriş hücresine bindiriyoruz
 		_layout.Controls.Add(_lblModelHint, 1, 2);
 
-		// ── Footer ────────────────────────────────────────────
 		_footerPanel = new Panel
 		{
 			Dock = DockStyle.Bottom,
@@ -207,7 +202,9 @@ public class VehicleForm : Form
 		_btnCancel.Click += (_, _) => { DialogResult = DialogResult.Cancel; Close(); };
 	}
 
-	// ── Marka yükle ───────────────────────────────────────────
+	/// <summary>
+	/// Form ilk açıldığında veritabanından tüm aktif araç markalarını çekerek açılır listeye (ComboBox) bağlar.
+	/// </summary>
 	private async Task LoadBrandsAsync()
 	{
 		try
@@ -225,7 +222,10 @@ public class VehicleForm : Form
 		}
 	}
 
-	// ── Marka seçilince modelleri doldur ──────────────────────
+	/// <summary>
+	/// Kullanıcı marka listesinden bir seçim yaptığında tetiklenir ve o markaya ait modelleri asenkron olarak getirir.
+	/// Model bulunamazsa kullanıcıya yardımcı ipucu metni gösterilir.
+	/// </summary>
 	private async Task OnBrandChangedAsync()
 	{
 		_cmbModel.DataSource = null;
@@ -264,7 +264,10 @@ public class VehicleForm : Form
 		}
 	}
 
-	// ── Kaydet ────────────────────────────────────────────────
+	/// <summary>
+	/// Kaydet butonuna basıldığında girdi doğrulama (Validation) işlemlerini yapar (Örn: Plaka boş mu, Model seçili mi?).
+	/// Kurallar geçerliyse aracı veritabanına kaydeder. Mükerrer plaka gibi durumlarda (InvalidOperationException) kullanıcıyı uyarır.
+	/// </summary>
 	private async Task OnSaveClickedAsync()
 	{
 		if (string.IsNullOrWhiteSpace(_txtPlate.Text))

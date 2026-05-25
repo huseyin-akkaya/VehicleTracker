@@ -1,10 +1,12 @@
-﻿// --- UI/Forms/ExpenseHistoryForm.cs ---
-
-using VehicleTracker.Business.Services;
+﻿using VehicleTracker.Business.Services;
 using VehicleTracker.Entities;
 
 namespace VehicleTracker.UI;
 
+/// <summary>
+/// Belirli bir araca ait geçmiş gider kayıtlarının (harcamaların) listelendiği ve toplam maliyetin hesaplanıp görüntülendiği form.
+/// DataGridView bileşeni kullanılarak veriler tablo formatında, salt okunur (read-only) olarak modern bir tasarımla sunulur.
+/// </summary>
 public class ExpenseHistoryForm : Form
 {
 	private readonly IExpenseService _expenseService;
@@ -23,6 +25,10 @@ public class ExpenseHistoryForm : Form
 		InitializeComponents();
 	}
 
+	/// <summary>
+	/// Form üzerindeki tabloyu (DataGridView), başlık ve alt bilgi panellerini programatik olarak oluşturur.
+	/// Tablo sütunları ve renk temaları, modern bir kullanıcı deneyimi sunacak şekilde özelleştirilmiştir.
+	/// </summary>
 	private void InitializeComponents()
 	{
 		Text = "Gider Geçmişi";
@@ -31,13 +37,13 @@ public class ExpenseHistoryForm : Form
 		BackColor = Color.FromArgb(245, 245, 245);
 		Font = new Font("Segoe UI", 9.5f);
 
-		// ── Header ────────────────────────────────────────────
 		_headerPanel = new Panel
 		{
 			Dock = DockStyle.Top,
 			Height = 56,
 			BackColor = Color.FromArgb(30, 30, 60)
 		};
+
 		_lblHeader = new Label
 		{
 			Text = $"📋  {_vehicle.Plate} - Gider Geçmişi",
@@ -48,7 +54,6 @@ public class ExpenseHistoryForm : Form
 		};
 		_headerPanel.Controls.Add(_lblHeader);
 
-		// ── Footer ────────────────────────────────────────────
 		_footerPanel = new Panel
 		{
 			Dock = DockStyle.Bottom,
@@ -56,6 +61,7 @@ public class ExpenseHistoryForm : Form
 			BackColor = Color.FromArgb(235, 235, 240),
 			Padding = new Padding(20, 0, 20, 0)
 		};
+
 		_lblTotal = new Label
 		{
 			Text = "💰  Toplam Masraf: 0,00 ₺",
@@ -67,7 +73,6 @@ public class ExpenseHistoryForm : Form
 		};
 		_footerPanel.Controls.Add(_lblTotal);
 
-		// ── Grid ──────────────────────────────────────────────
 		_grid = new DataGridView
 		{
 			Dock = DockStyle.Fill,
@@ -111,13 +116,17 @@ public class ExpenseHistoryForm : Form
 		Load += async (_, _) => await LoadDataAsync();
 	}
 
+	/// <summary>
+	/// Veritabanından ilgili araca ait tüm gider kayıtlarını asenkron olarak çeker.
+	/// Çekilen ham veriler (Entity nesneleri), DataGridView'de düzgün ve formatlı görüntülenebilmesi için isimsiz (Anonymous) bir ViewModel yapısına dönüştürülür.
+	/// Aynı zamanda tüm harcamaların toplamı hesaplanıp alt bilgi paneline yazdırılır.
+	/// </summary>
 	private async Task LoadDataAsync()
 	{
 		try
 		{
 			var expenses = await _expenseService.GetExpensesByVehicleAsync(_vehicle.Id);
 
-			// Verileri grid'e basmak için isimsiz bir listeye (Anonymous Type) çeviriyoruz
 			var viewModels = expenses.OrderByDescending(e => e.ExpenseDate).Select(e => new
 			{
 				Date = e.ExpenseDate.ToString("dd.MM.yyyy"),
@@ -129,7 +138,6 @@ public class ExpenseHistoryForm : Form
 
 			_grid.DataSource = viewModels;
 
-			// Alt kısımdaki genel toplamı hesapla
 			decimal total = expenses.Sum(e => e.Amount);
 			_lblTotal.Text = $"💰  Toplam Masraf: {total:N2} ₺";
 		}

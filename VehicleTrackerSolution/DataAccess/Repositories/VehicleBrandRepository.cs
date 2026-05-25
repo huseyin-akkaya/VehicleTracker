@@ -1,5 +1,4 @@
-﻿// --- DataAccess/Repositories/VehicleBrandRepository.cs ---
-
+﻿
 using Microsoft.EntityFrameworkCore;
 using VehicleTracker.DataAccess.Context;
 using VehicleTracker.Entities;

@@ -1,5 +1,4 @@
-﻿// --- Business/Services/VehicleService.cs ---
-
+﻿
 using VehicleTracker.DataAccess.Repositories;
 using VehicleTracker.Entities;
 

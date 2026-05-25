@@ -1,19 +1,24 @@
-﻿// --- DataAccess/Context/AppDbContext.cs ---
-
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using VehicleTracker.Entities;
 
 namespace VehicleTracker.DataAccess.Context;
 
+/// <summary>
+/// Uygulamanın veritabanı işlemlerini yürüten ve SQLite bağlantısını yöneten ana Entity Framework bağlam (Context) sınıfı.
+/// </summary>
 public class AppDbContext : DbContext
 {
 	public DbSet<Vehicle> Vehicles { get; set; }
 	public DbSet<VehicleBrand> VehicleBrands { get; set; }
-	public DbSet<VehicleModel> VehicleModels { get; set; }   // ← YENİ
+	public DbSet<VehicleModel> VehicleModels { get; set; }
 	public DbSet<Expense> Expenses { get; set; }
 	public DbSet<Category> Categories { get; set; }
 	public DbSet<Setting> Settings { get; set; }
 
+	/// <summary>
+	/// Veritabanı bağlantı ayarlarını yapılandırır. 
+	/// Uygulama tamamen bağımsız çalışacağı için SQLite veritabanı dosyasının (VehicleDb.sqlite) direkt uygulamanın çalıştığı dizinde oluşturulması hedeflenmiştir.
+	/// </summary>
 	protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 	{
 		string dbPath = Path.Combine(
@@ -28,12 +33,15 @@ public class AppDbContext : DbContext
 #endif
 	}
 
+	/// <summary>
+	/// Veritabanı tablolarının, ilişkilerinin (Foreign Key), indekslemelerinin ve varsayılan verilerin (Seed Data) Fluent API kullanılarak tanımlandığı ana metot.
+	/// </summary>
 	protected override void OnModelCreating(ModelBuilder modelBuilder)
 	{
 		base.OnModelCreating(modelBuilder);
 
 		ConfigureVehicleBrand(modelBuilder);
-		ConfigureVehicleModel(modelBuilder);      // ← YENİ
+		ConfigureVehicleModel(modelBuilder);
 		ConfigureVehicle(modelBuilder);
 		ConfigureCategory(modelBuilder);
 		ConfigureExpense(modelBuilder);
@@ -41,8 +49,10 @@ public class AppDbContext : DbContext
 
 		SeedData(modelBuilder);
 	}
-	
-	// ── VehicleBrand — değişmedi ──────────────────────────────
+
+	/// <summary>
+	/// Araç markaları tablosunun şema ayarlarını, kısıtlamalarını ve SQLite uyumluluğu için DateTime -> String dönüşümlerini yapılandırır.
+	/// </summary>
 	private static void ConfigureVehicleBrand(ModelBuilder mb)
 	{
 		mb.Entity<VehicleBrand>(entity =>
@@ -60,7 +70,9 @@ public class AppDbContext : DbContext
 		});
 	}
 
-	// ── VehicleModel — YENİ ───────────────────────────────────
+	/// <summary>
+	/// Araç modelleri tablosunun varsayılan değerlerini (DefaultValue) atar ve markalar tablosu ile olan Cascade (Kademeli Silme) ilişkisini tanımlar.
+	/// </summary>
 	private static void ConfigureVehicleModel(ModelBuilder mb)
 	{
 		mb.Entity<VehicleModel>(entity =>
@@ -68,31 +80,19 @@ public class AppDbContext : DbContext
 			entity.ToTable("VehicleModels");
 			entity.HasKey(e => e.Id);
 
-			entity.Property(e => e.Name)
-				  .IsRequired()
-				  .HasMaxLength(100);
-
-			entity.Property(e => e.EngineVolume)
-				  .HasDefaultValue(0.0);
-
-			entity.Property(e => e.WeightKg)
-				  .HasDefaultValue(0);
-
-			entity.Property(e => e.AvgFuelConsumption)
-				  .HasDefaultValue(0.0);
-
-			entity.Property(e => e.RemoteId)
-				  .HasMaxLength(100);
+			entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
+			entity.Property(e => e.EngineVolume).HasDefaultValue(0.0);
+			entity.Property(e => e.WeightKg).HasDefaultValue(0);
+			entity.Property(e => e.AvgFuelConsumption).HasDefaultValue(0.0);
+			entity.Property(e => e.RemoteId).HasMaxLength(100);
 
 			entity.Property(e => e.SyncedAt)
 				  .HasConversion(
 					  v => v.HasValue ? v.Value.ToString("o") : null,
 					  v => v != null ? DateTime.Parse(v) : (DateTime?)null);
 
-			// Aynı markada aynı isimde iki model olamaz
 			entity.HasIndex(e => new { e.BrandId, e.Name }).IsUnique();
 
-			// İlişki: VehicleModel → VehicleBrand (çok-bir)
 			entity.HasOne(e => e.Brand)
 				  .WithMany()
 				  .HasForeignKey(e => e.BrandId)
@@ -100,7 +100,10 @@ public class AppDbContext : DbContext
 		});
 	}
 
-	// ── Vehicle ───────────────────────────────────────────────
+	/// <summary>
+	/// Kullanıcıya ait araçların kaydedildiği tablonun ayarlarını yapar. 
+	/// Veri bütünlüğünü korumak adına marka ve model silinmelerinde "Restrict" (Kısıtlama) davranışı uygulanmıştır.
+	/// </summary>
 	private static void ConfigureVehicle(ModelBuilder mb)
 	{
 		mb.Entity<Vehicle>(entity =>
@@ -108,9 +111,7 @@ public class AppDbContext : DbContext
 			entity.ToTable("Vehicles");
 			entity.HasKey(e => e.Id);
 
-			entity.Property(e => e.Plate)
-				  .IsRequired()
-				  .HasMaxLength(20);
+			entity.Property(e => e.Plate).IsRequired().HasMaxLength(20);
 			entity.HasIndex(e => e.Plate).IsUnique();
 
 			entity.Property(e => e.Year).IsRequired();
@@ -122,13 +123,11 @@ public class AppDbContext : DbContext
 			entity.Property(e => e.UpdatedAt).IsRequired()
 				  .HasConversion(v => v.ToString("o"), v => DateTime.Parse(v));
 
-			// Vehicle → VehicleBrand
 			entity.HasOne(e => e.Brand)
 				  .WithMany(b => b.Vehicles)
 				  .HasForeignKey(e => e.BrandId)
 				  .OnDelete(DeleteBehavior.Restrict);
 
-			// Vehicle → VehicleModel  ← YENİ
 			entity.HasOne(e => e.Model)
 				  .WithMany()
 				  .HasForeignKey(e => e.ModelId)
@@ -136,7 +135,9 @@ public class AppDbContext : DbContext
 		});
 	}
 
-	// ── Category ──────────────────────────────────────────────
+	/// <summary>
+	/// Gider kategorilerinin yapılandırması. Sistem tarafından zorunlu olan ve sonradan eklenebilir kategoriler için ayarlar içerir.
+	/// </summary>
 	private static void ConfigureCategory(ModelBuilder mb)
 	{
 		mb.Entity<Category>(entity =>
@@ -151,7 +152,9 @@ public class AppDbContext : DbContext
 		});
 	}
 
-	// ── Expense ───────────────────────────────────────────────
+	/// <summary>
+	/// Araçlara ait harcamaların tutulduğu tablonun yapılandırması. Tutar kolonunun Decimal tipi ayarlanmış ve hızlı sorgulama için indeksler oluşturulmuştur.
+	/// </summary>
 	private static void ConfigureExpense(ModelBuilder mb)
 	{
 		mb.Entity<Expense>(entity =>
@@ -162,25 +165,31 @@ public class AppDbContext : DbContext
 			entity.Property(e => e.CurrencyCode).IsRequired().HasMaxLength(10).HasDefaultValue("TRY");
 			entity.Property(e => e.Description).HasMaxLength(500);
 			entity.Property(e => e.ReceiptPath).HasMaxLength(500);
+
 			entity.Property(e => e.ExpenseDate).IsRequired()
 				  .HasConversion(v => v.ToString("o"), v => DateTime.Parse(v));
 			entity.Property(e => e.CreatedAt).IsRequired()
 				  .HasConversion(v => v.ToString("o"), v => DateTime.Parse(v));
+
 			entity.HasOne(e => e.Vehicle)
 				  .WithMany(v => v.Expenses)
 				  .HasForeignKey(e => e.VehicleId)
 				  .OnDelete(DeleteBehavior.Cascade);
+
 			entity.HasOne(e => e.Category)
 				  .WithMany(c => c.Expenses)
 				  .HasForeignKey(e => e.CategoryId)
 				  .OnDelete(DeleteBehavior.Restrict);
+
 			entity.HasIndex(e => e.VehicleId);
 			entity.HasIndex(e => e.ExpenseDate);
 			entity.HasIndex(e => e.CategoryId);
 		});
 	}
 
-	// ── Setting ───────────────────────────────────────────────
+	/// <summary>
+	/// Uygulama geneli dinamik ayarların tutulduğu Key-Value tablosunun yapılandırması.
+	/// </summary>
 	private static void ConfigureSetting(ModelBuilder mb)
 	{
 		mb.Entity<Setting>(entity =>
@@ -195,7 +204,9 @@ public class AppDbContext : DbContext
 		});
 	}
 
-	// ── Seed ──────────────────────────────────────────────────
+	/// <summary>
+	/// Veritabanı ilk kez oluşturulduğunda sistemin zorunlu ihtiyaç duyduğu temel harcama kategorilerini ve uygulama ayarlarını tablolara enjekte eder (Seed).
+	/// </summary>
 	private static void SeedData(ModelBuilder mb)
 	{
 		var now = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);

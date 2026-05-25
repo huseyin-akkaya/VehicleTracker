@@ -1,5 +1,4 @@
-﻿// --- Business/Sync/SyncManager.cs ---
-
+﻿
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using VehicleTracker.DataAccess.Repositories;
@@ -11,16 +10,14 @@ public class SyncManager
 {
 	private readonly HttpClient _httpClient;
 	private readonly VehicleBrandRepository _brandRepository;
-	private readonly VehicleModelRepository _modelRepository;   // ← YENİ
-	private readonly GenericRepository<Setting> _settingRepository;
+	private readonly VehicleModelRepository _modelRepository;   	private readonly GenericRepository<Setting> _settingRepository;
 
 	public event EventHandler<SyncResultEventArgs>? SyncCompleted;
 
 	public SyncManager(
 		HttpClient httpClient,
 		VehicleBrandRepository brandRepository,
-		VehicleModelRepository modelRepository,    // ← YENİ
-		GenericRepository<Setting> settingRepository)
+		VehicleModelRepository modelRepository,    		GenericRepository<Setting> settingRepository)
 	{
 		_httpClient = httpClient;
 		_brandRepository = brandRepository;
@@ -28,8 +25,7 @@ public class SyncManager
 		_settingRepository = settingRepository;
 	}
 
-	// ── Ana metod ─────────────────────────────────────────────
-
+	
 	public async Task SynchronizeAsync()
 	{
 		try
@@ -66,8 +62,7 @@ public class SyncManager
 			}
 
 			int brandCount = await UpsertBrandsAsync(remoteData.Brands);
-			int modelCount = await UpsertModelsAsync(remoteData.Models);    // ← YENİ
-			int coeffCount = await UpsertTaxCoefficientsAsync(remoteData.TaxCoefficients);
+			int modelCount = await UpsertModelsAsync(remoteData.Models);    			int coeffCount = await UpsertTaxCoefficientsAsync(remoteData.TaxCoefficients);
 
 			await UpdateSyncMetaAsync(remoteData.Version);
 
@@ -84,8 +79,7 @@ public class SyncManager
 		}
 	}
 
-	// ── Bağlantı kontrolü ─────────────────────────────────────
-
+	
 	private async Task<bool> CheckConnectivityAsync()
 	{
 		try
@@ -100,8 +94,7 @@ public class SyncManager
 		catch { return false; }
 	}
 
-	// ── JSON indirme ──────────────────────────────────────────
-
+	
 	private async Task<RemoteSyncData?> FetchRemoteDataAsync(string url)
 	{
 		try
@@ -114,8 +107,7 @@ public class SyncManager
 		catch { return null; }
 	}
 
-	// ── Marka upsert ──────────────────────────────────────────
-
+	
 	private async Task<int> UpsertBrandsAsync(IList<RemoteBrand>? remoteBrands)
 	{
 		if (remoteBrands is null || remoteBrands.Count == 0) return 0;
@@ -153,14 +145,12 @@ public class SyncManager
 		return count;
 	}
 
-	// ── Model upsert — YENİ ───────────────────────────────────
-
+	
 	private async Task<int> UpsertModelsAsync(IList<RemoteModel>? remoteModels)
 	{
 		if (remoteModels is null || remoteModels.Count == 0) return 0;
 
-		// Güncel marka listesini çek — BrandRemoteId → Brand.Id eşlemesi için
-		var localBrands = await _brandRepository.GetAllAsync();
+				var localBrands = await _brandRepository.GetAllAsync();
 		var brandIdMap = localBrands
 			.Where(b => b.RemoteId != null)
 			.ToDictionary(b => b.RemoteId!, b => b.Id);
@@ -175,16 +165,13 @@ public class SyncManager
 				|| string.IsNullOrWhiteSpace(remote.BrandId))
 				continue;
 
-			// Markanın yerel DB'deki Id'sini bul
-			if (!brandIdMap.TryGetValue(remote.BrandId, out int localBrandId))
-				continue; // İlgili marka DB'de yoksa modeli atla
-
+						if (!brandIdMap.TryGetValue(remote.BrandId, out int localBrandId))
+				continue; 
 			var local = localModels.FirstOrDefault(m => m.RemoteId == remote.Id);
 
 			if (local is not null)
 			{
-				// Güncelle
-				local.Name = remote.Name;
+								local.Name = remote.Name;
 				local.BrandId = localBrandId;
 				local.EngineVolume = remote.EngineVolume;
 				local.WeightKg = remote.WeightKg;
@@ -194,8 +181,7 @@ public class SyncManager
 			}
 			else
 			{
-				// Yeni ekle
-				await _modelRepository.AddAsync(new VehicleModel
+								await _modelRepository.AddAsync(new VehicleModel
 				{
 					Name = remote.Name,
 					BrandId = localBrandId,
@@ -213,8 +199,7 @@ public class SyncManager
 		return count;
 	}
 
-	// ── Vergi katsayısı upsert ────────────────────────────────
-
+	
 	private async Task<int> UpsertTaxCoefficientsAsync(
 		Dictionary<string, decimal>? coefficients)
 	{
@@ -262,8 +247,7 @@ public class SyncManager
 		return count;
 	}
 
-	// ── Meta güncelleme ───────────────────────────────────────
-
+	
 	private async Task UpdateSyncMetaAsync(int newVersion)
 	{
 		await UpsertSingleSettingAsync("LastSyncVersion", newVersion.ToString());
@@ -300,7 +284,6 @@ public class SyncManager
 		=> SyncCompleted?.Invoke(this, new SyncResultEventArgs(status, message));
 }
 
-// ── DTO'lar ───────────────────────────────────────────────────
 
 public enum SyncStatus { Success, UpToDate, Offline, Skipped, Failed }
 
@@ -319,8 +302,7 @@ internal class RemoteSyncData
 	public List<RemoteBrand> Brands { get; set; } = new();
 
 	[JsonPropertyName("models")]
-	public List<RemoteModel> Models { get; set; } = new();    // ← YENİ
-
+	public List<RemoteModel> Models { get; set; } = new();    
 	[JsonPropertyName("taxCoefficients")]
 	public Dictionary<string, decimal> TaxCoefficients { get; set; } = new();
 }
@@ -332,8 +314,7 @@ internal class RemoteBrand
 	[JsonPropertyName("country")] public string? Country { get; set; }
 }
 
-internal class RemoteModel                                      // ← YENİ
-{
+internal class RemoteModel                                      {
 	[JsonPropertyName("id")] public string Id { get; set; } = string.Empty;
 	[JsonPropertyName("brandId")] public string BrandId { get; set; } = string.Empty;
 	[JsonPropertyName("name")] public string Name { get; set; } = string.Empty;

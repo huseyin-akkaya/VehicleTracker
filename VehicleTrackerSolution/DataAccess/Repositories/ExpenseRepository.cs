@@ -1,5 +1,4 @@
-﻿// --- DataAccess/Repositories/ExpenseRepository.cs ---
-
+﻿
 using Microsoft.EntityFrameworkCore;
 using VehicleTracker.DataAccess.Context;
 using VehicleTracker.Entities;

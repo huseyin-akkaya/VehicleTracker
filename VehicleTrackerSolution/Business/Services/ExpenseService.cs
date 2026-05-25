@@ -1,5 +1,4 @@
-﻿// --- Business/Services/ExpenseService.cs ---
-
+﻿
 using Microsoft.EntityFrameworkCore;
 using VehicleTracker.DataAccess.Context;
 using VehicleTracker.DataAccess.Repositories;
@@ -23,8 +22,7 @@ public class ExpenseService : IExpenseService
 		_taxCalculator = taxCalculator;
 	}
 
-	// ── Okuma ──────────────────────────────────────────────────
-
+	
 	public async Task<IList<Expense>> GetAllExpensesAsync()
 		=> await _expenseRepository.GetAllAsync();
 
@@ -38,18 +36,15 @@ public class ExpenseService : IExpenseService
 	public async Task<Expense?> GetExpenseByIdAsync(int id)
 		=> await _expenseRepository.GetByIdAsync(id);
 
-	// ── Yazma ──────────────────────────────────────────────────
-
+	
 	public async Task AddExpenseAsync(Expense expense)
 	{
 		ValidateExpense(expense);
 
-		// Araç var mı kontrol et
-		var vehicle = await _vehicleRepository.GetByIdAsync(expense.VehicleId)
+				var vehicle = await _vehicleRepository.GetByIdAsync(expense.VehicleId)
 			?? throw new KeyNotFoundException($"Araç bulunamadı. VehicleId: {expense.VehicleId}");
 
-		// Gider tarihinde km kaydedildiyse aracın sayacını ilerlet
-		if (expense.KmAtExpense.HasValue && expense.KmAtExpense > vehicle.CurrentKm)
+				if (expense.KmAtExpense.HasValue && expense.KmAtExpense > vehicle.CurrentKm)
 		{
 			vehicle.CurrentKm = expense.KmAtExpense.Value;
 			vehicle.UpdatedAt = DateTime.UtcNow;
@@ -59,16 +54,14 @@ public class ExpenseService : IExpenseService
 		expense.CreatedAt = DateTime.UtcNow;
 
 		await _expenseRepository.AddAsync(expense);
-		await _expenseRepository.SaveChangesAsync(); // tek transaction'da commit
-	}
+		await _expenseRepository.SaveChangesAsync(); 	}
 
 	public async Task UpdateExpenseAsync(Expense expense)
 	{
 		ValidateExpense(expense);
 
 		expense.CreatedAt = (await _expenseRepository.GetByIdAsync(expense.Id))?.CreatedAt
-							 ?? DateTime.UtcNow; // orijinal oluşturma tarihini koru
-
+							 ?? DateTime.UtcNow; 
 		await _expenseRepository.UpdateAsync(expense);
 		await _expenseRepository.SaveChangesAsync();
 	}
@@ -79,8 +72,7 @@ public class ExpenseService : IExpenseService
 		await _expenseRepository.SaveChangesAsync();
 	}
 
-	// ── Özet / Raporlama ───────────────────────────────────────
-
+	
 	public async Task<ExpenseSummary> GetExpenseSummaryAsync(
 		int vehicleId, DateTime start, DateTime end)
 	{
@@ -95,8 +87,7 @@ public class ExpenseService : IExpenseService
 
 		foreach (var expense in expenses)
 		{
-			// Her gider için vergi tutarını hesapla
-			decimal taxAmount = await _taxCalculator.CalculateTaxAsync(
+						decimal taxAmount = await _taxCalculator.CalculateTaxAsync(
 				expense.Amount,
 				expense.Category?.Name ?? "Diğer",
 				vehicle.Year
@@ -118,8 +109,7 @@ public class ExpenseService : IExpenseService
 		);
 	}
 
-	// ── Özel doğrulama ─────────────────────────────────────────
-
+	
 	private static void ValidateExpense(Expense e)
 	{
 		if (e.Amount <= 0)

@@ -1,19 +1,19 @@
-﻿// --- UI/Forms/ExpenseForm.cs ---
-
-using VehicleTracker.Business.Services;
+﻿using VehicleTracker.Business.Services;
 using VehicleTracker.DataAccess.Context;
 using VehicleTracker.Entities;
 
 namespace VehicleTracker.UI;
 
+/// <summary>
+/// Kullanıcının seçili araca yeni bir harcama (yakıt, bakım, sigorta vb.) eklemesini sağlayan diyalog penceresi.
+/// Girdi alanları programatik olarak oluşturulmuş ve formun TableLayoutPanel yapısı ile düzenlenmiştir.
+/// </summary>
 public class ExpenseForm : Form
 {
-	// ── Bağımlılıklar ─────────────────────────────────────────
 	private readonly IExpenseService _expenseService;
 	private readonly AppDbContext _context;
 	private readonly Vehicle _vehicle;
 
-	// ── UI Bileşenleri ────────────────────────────────────────
 	private Panel _headerPanel = null!;
 	private Label _lblHeader = null!;
 	private TableLayoutPanel _layout = null!;
@@ -46,9 +46,12 @@ public class ExpenseForm : Form
 		InitializeComponents();
 	}
 
+	/// <summary>
+	/// Form üzerindeki girdi alanlarını, butonları, stilleri ve yerleşim planını oluşturur.
+	/// Arayüz performansı ve dinamik boyutlandırma için Control dock ve margin özellikleri kullanılmıştır.
+	/// </summary>
 	private void InitializeComponents()
 	{
-		// ── Form ──────────────────────────────────────────────
 		Text = "Gider Ekle";
 		Size = new Size(480, 460);
 		FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -57,7 +60,6 @@ public class ExpenseForm : Form
 		BackColor = Color.FromArgb(245, 245, 245);
 		Font = new Font("Segoe UI", 9.5f);
 
-		// ── Header ────────────────────────────────────────────
 		_headerPanel = new Panel
 		{
 			Dock = DockStyle.Top,
@@ -75,7 +77,6 @@ public class ExpenseForm : Form
 		};
 		_headerPanel.Controls.Add(_lblHeader);
 
-		// ── Layout ────────────────────────────────────────────
 		_layout = new TableLayoutPanel
 		{
 			Dock = DockStyle.Fill,
@@ -90,10 +91,8 @@ public class ExpenseForm : Form
 		for (int i = 0; i < 5; i++)
 			_layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52f));
 
-		// Açıklama satırı biraz daha yüksek
 		_layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 72f));
 
-		// ── Kategori ──────────────────────────────────────────
 		_lblCategory = MakeLabel("Kategori *");
 		_cmbCategory = new ComboBox
 		{
@@ -105,7 +104,6 @@ public class ExpenseForm : Form
 			FlatStyle = FlatStyle.Flat
 		};
 
-		// ── Tutar ─────────────────────────────────────────────
 		_lblAmount = MakeLabel("Tutar (₺) *");
 		_numAmount = new NumericUpDown
 		{
@@ -117,7 +115,6 @@ public class ExpenseForm : Form
 			BackColor = Color.White
 		};
 
-		// ── Tarih ─────────────────────────────────────────────
 		_lblDate = MakeLabel("İşlem Tarihi *");
 		_dtpDate = new DateTimePicker
 		{
@@ -129,7 +126,6 @@ public class ExpenseForm : Form
 			CalendarTitleForeColor = Color.White
 		};
 
-		// ── Kilometre ─────────────────────────────────────────
 		_lblKm = MakeLabel("O Anki Km");
 		_numKm = new NumericUpDown
 		{
@@ -141,7 +137,6 @@ public class ExpenseForm : Form
 			BackColor = Color.White
 		};
 
-		// ── Açıklama ──────────────────────────────────────────
 		_lblDesc = MakeLabel("Açıklama");
 		_txtDesc = new TextBox
 		{
@@ -153,14 +148,12 @@ public class ExpenseForm : Form
 			ScrollBars = ScrollBars.Vertical
 		};
 
-		// Layout'a satır satır ekle
 		AddRow(0, _lblCategory, _cmbCategory);
 		AddRow(1, _lblAmount, _numAmount);
 		AddRow(2, _lblDate, _dtpDate);
 		AddRow(3, _lblKm, _numKm);
 		AddRow(4, _lblDesc, _txtDesc);
 
-		// ── Footer ────────────────────────────────────────────
 		_footerPanel = new Panel
 		{
 			Dock = DockStyle.Bottom,
@@ -199,12 +192,10 @@ public class ExpenseForm : Form
 		};
 		_footerPanel.Controls.AddRange(new Control[] { _btnSave, _btnCancel });
 
-		// ── Yerleşim ──────────────────────────────────────────
 		Controls.Add(_layout);
 		Controls.Add(_footerPanel);
 		Controls.Add(_headerPanel);
 
-		// ── Events ────────────────────────────────────────────
 		AcceptButton = _btnSave;
 		CancelButton = _btnCancel;
 		_btnSave.Click += async (_, _) => await OnSaveClickedAsync();
@@ -212,9 +203,10 @@ public class ExpenseForm : Form
 		Load += async (_, _) => await LoadCategoriesAsync();
 	}
 
-	// ─────────────────────────────────────────────────────────
-	//  Kategorileri yükle
-	// ─────────────────────────────────────────────────────────
+	/// <summary>
+	/// Veritabanında (SQLite) tanımlı olan gider kategorilerini çekerek ComboBox listesine doldurur.
+	/// UI donmasını engellemek için işlem asenkron çalıştırılır.
+	/// </summary>
 	private async Task LoadCategoriesAsync()
 	{
 		try
@@ -233,9 +225,10 @@ public class ExpenseForm : Form
 		}
 	}
 
-	// ─────────────────────────────────────────────────────────
-	//  Kaydet
-	// ─────────────────────────────────────────────────────────
+	/// <summary>
+	/// Kullanıcının girdiği verileri doğrular (Validation) ve geçerliyse yeni bir Expense nesnesi oluşturarak veritabanına kaydeder.
+	/// Kayıt işlemi sırasında çoklu tıklamaları önlemek için kaydet butonu devre dışı bırakılır.
+	/// </summary>
 	private async Task OnSaveClickedAsync()
 	{
 		if (_cmbCategory.SelectedItem is null)
@@ -290,9 +283,9 @@ public class ExpenseForm : Form
 		}
 	}
 
-	// ─────────────────────────────────────────────────────────
-	//  Yardımcılar
-	// ─────────────────────────────────────────────────────────
+	/// <summary>
+	/// Girdi alanlarının yanındaki standart metin etiketlerini (Label) oluşturmak için kullanılan yardımcı metot.
+	/// </summary>
 	private static Label MakeLabel(string text) => new()
 	{
 		Text = text,
@@ -302,6 +295,9 @@ public class ExpenseForm : Form
 		ForeColor = Color.FromArgb(60, 60, 80)
 	};
 
+	/// <summary>
+	/// TableLayoutPanel üzerindeki belirtilen satıra etiket (Label) ve kontrol (Input) bileşenlerini hizalayarak ekler.
+	/// </summary>
 	private void AddRow(int row, Control lbl, Control input)
 	{
 		lbl.Margin = new Padding(0, 10, 8, 0);

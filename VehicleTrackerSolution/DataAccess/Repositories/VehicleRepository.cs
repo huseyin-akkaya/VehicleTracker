@@ -1,5 +1,4 @@
-﻿// --- DataAccess/Repositories/VehicleRepository.cs ---
-
+﻿
 using Microsoft.EntityFrameworkCore;
 using VehicleTracker.DataAccess.Context;
 using VehicleTracker.Entities;
@@ -14,8 +13,7 @@ public class VehicleRepository : GenericRepository<Vehicle>
 	{
 		return await _dbSet
 			.Include(v => v.Brand)
-			.Include(v => v.Model)   // ← ModelName yerine
-			.FirstOrDefaultAsync(v => v.Id == id);
+			.Include(v => v.Model)   			.FirstOrDefaultAsync(v => v.Id == id);
 	}
 
 	public override async Task<IList<Vehicle>> GetAllAsync()
@@ -23,8 +21,7 @@ public class VehicleRepository : GenericRepository<Vehicle>
 		return await _dbSet
 			.AsNoTracking()
 			.Include(v => v.Brand)
-			.Include(v => v.Model)   // ← ModelName yerine
-			.Where(v => v.IsActive)
+			.Include(v => v.Model)   			.Where(v => v.IsActive)
 			.OrderBy(v => v.Plate)
 			.ToListAsync();
 	}

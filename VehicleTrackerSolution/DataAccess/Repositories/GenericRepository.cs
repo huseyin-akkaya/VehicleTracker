@@ -1,14 +1,9 @@
-﻿// --- DataAccess/Repositories/GenericRepository.cs ---
-
+﻿
 using Microsoft.EntityFrameworkCore;
 using VehicleTracker.DataAccess.Context;
 
 namespace VehicleTracker.DataAccess.Repositories;
 
-/// <summary>
-/// IRepository'nin EF Core + SQLite üzerindeki somut implementasyonu.
-/// Tüm entity-spesifik repository'ler bu sınıfı miras alabilir.
-/// </summary>
 public class GenericRepository<T> : IRepository<T> where T : class
 {
 	protected readonly AppDbContext _context;
@@ -20,8 +15,7 @@ public class GenericRepository<T> : IRepository<T> where T : class
 		_dbSet = context.Set<T>();
 	}
 
-	// ── Okuma ──────────────────────────────────────────────────
-
+	
 	public virtual async Task<T?> GetByIdAsync(int id)
 	{
 		return await _dbSet.FindAsync(id);
@@ -32,8 +26,7 @@ public class GenericRepository<T> : IRepository<T> where T : class
 		return await _dbSet.AsNoTracking().ToListAsync();
 	}
 
-	// ── Yazma ──────────────────────────────────────────────────
-
+	
 	public virtual async Task AddAsync(T entity)
 	{
 		await _dbSet.AddAsync(entity);
@@ -41,9 +34,7 @@ public class GenericRepository<T> : IRepository<T> where T : class
 
 	public virtual async Task UpdateAsync(T entity)
 	{
-		// EF Core zaten takip ediyorsa Modified durumuna geçer,
-		// Detached geliyorsa Attach + Modified yapar.
-		_dbSet.Update(entity);
+						_dbSet.Update(entity);
 		await Task.CompletedTask;
 	}
 
@@ -57,8 +48,7 @@ public class GenericRepository<T> : IRepository<T> where T : class
 		_dbSet.Remove(entity);
 	}
 
-	// ── Kaydetme ───────────────────────────────────────────────
-
+	
 	public async Task SaveChangesAsync()
 	{
 		await _context.SaveChangesAsync();

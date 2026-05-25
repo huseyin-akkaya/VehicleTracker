@@ -1,5 +1,3 @@
-// --- UI/Program.cs ---
-
 using Microsoft.Extensions.DependencyInjection;
 using VehicleTracker.Business.Services;
 using VehicleTracker.Business.Sync;
@@ -9,11 +7,18 @@ using VehicleTracker.Entities;
 
 namespace VehicleTracker.UI;
 
+/// <summary>
+/// Uygulamanın ana giriş noktasıdır.
+/// Dependency Injection (Bağımlılık Enjeksiyonu) konteynerinin yapılandırılması, veritabanının ayağa kaldırılması ve ilk formun yüklenmesi işlemlerini üstlenir.
+/// </summary>
 internal static class Program
 {
-	private const string GistRawUrl =
-		"https://gist.githubusercontent.com/huseyin-akkaya/09fd9770407d228f8179a7a78c10e4b2/raw/ca3ba58a2770b540766b06870937fbd38ef6f348/vehicle-data-v2.json";
+	private const string GistRawUrl = "https://gist.githubusercontent.com/huseyin-akkaya/09fd9770407d228f8179a7a78c10e4b2/raw/vehicle-data-v2.json";
 
+	/// <summary>
+	/// Uygulamanın başlatıldığı ana metot.
+	/// UI stillerini ayarlar, servisleri kaydeder, SQLite veritabanı dosyasının varlığını kontrol eder ve DashboardForm ile uygulamayı başlatır.
+	/// </summary>
 	[STAThread]
 	static void Main()
 	{
@@ -32,11 +37,13 @@ internal static class Program
 			SeedSyncUrl(context);
 		}
 
-		// ← Artık DashboardForm ile başlıyor
 		var dashboard = provider.GetRequiredService<DashboardForm>();
 		Application.Run(dashboard);
 	}
 
+	/// <summary>
+	/// Veritabanı ilk kez oluşturulduğunda veya ayar eksik olduğunda senkronizasyon için kullanılacak GitHub Gist URL'sini Settings tablosuna yazar.
+	/// </summary>
 	private static void SeedSyncUrl(AppDbContext context)
 	{
 		var setting = context.Settings.Find("SyncUrl");
@@ -58,18 +65,20 @@ internal static class Program
 		context.SaveChanges();
 	}
 
+	/// <summary>
+	/// Uygulama genelinde kullanılacak olan veritabanı bağlamını (DbContext), veri erişim katmanlarını (Repository), 
+	/// iş kuralları servislerini ve arayüz formlarını Inversion of Control (IoC) prensibine uygun olarak DI konteynerine kaydeder.
+	/// </summary>
 	private static void ConfigureServices(IServiceCollection services)
 	{
 		services.AddScoped<AppDbContext>();
 
-		// Repositories
 		services.AddTransient<VehicleRepository>();
 		services.AddTransient<ExpenseRepository>();
 		services.AddTransient<VehicleBrandRepository>();
 		services.AddTransient<VehicleModelRepository>();
 		services.AddTransient<GenericRepository<Setting>>();
 
-		// Business
 		services.AddTransient<IVehicleService, VehicleService>();
 		services.AddTransient<IExpenseService, ExpenseService>();
 		services.AddTransient<TaxCalculatorService>();
@@ -79,8 +88,8 @@ internal static class Program
 
 		services.AddTransient<SyncManager>();
 
-		// Forms
-		services.AddSingleton<IServiceProvider>(p => p);  // self-registration
+		services.AddSingleton<IServiceProvider>(p => p);
+
 		services.AddTransient<DashboardForm>();
 		services.AddTransient<MainForm>();
 		services.AddTransient<VehicleForm>();
