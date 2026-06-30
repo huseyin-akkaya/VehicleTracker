@@ -4,7 +4,7 @@
 
 Bu proje, araç sahiplerinin rutin giderlerini (yakıt, bakım, sigorta) yerel ortamda güvenle takip edebilmelerini ve gelecek dönem maliyetlerini simüle edebilmelerini sağlayan **çevrimdışı (offline-first)** destekli bir masaüstü uygulamasıdır.
 
-Bu yazılım, modern geliştirme süreçlerini deneyimlemek amacıyla yapay zeka (Gemini) ile bir **Eşli Programlama (Pair Programming)** pratiği olarak baştan sona tasarlanmış ve kodlanmıştır.
+Bu yazılım, modern geliştirme süreçlerini deneyimlemek amacıyla yapay zeka (Claude) ile bir **Eşli Programlama (Pair Programming)** pratiği olarak baştan sona tasarlanmış ve kodlanmıştır.
 
 ## ✨ Öne Çıkan Özellikler
 
