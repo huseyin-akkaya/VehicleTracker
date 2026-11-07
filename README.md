@@ -26,7 +26,7 @@ Bu yazılım, modern geliştirme süreçlerini deneyimlemek amacıyla yapay zeka
 
 Proje **Single File (Tek Dosya)** olarak derlenecek şekilde yapılandırılmıştır. Kaynak kodları indirip kendiniz derlemek isterseniz:
 
-1. Depoyu klonlayın: `git clone https://github.com/KULLANICI_ADINIZ/VehicleTrackerApp.git`
+1. Depoyu klonlayın: `git clone https://github.com/huseyin-akkaya/VehicleTracker.git`
 2. Çözüm (Solution) dosyasını Visual Studio ile açın.
 3. Package Manager Console üzerinden tek dosya çıktısı almak için şu komutu çalıştırın:
    ```bash
